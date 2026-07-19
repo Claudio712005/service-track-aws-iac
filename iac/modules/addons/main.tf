@@ -1,3 +1,7 @@
+locals {
+  node_group_ready = var.node_group_dependency
+}
+
 resource "helm_release" "metrics_server" {
   name             = "metrics-server"
   repository       = "https://kubernetes-sigs.github.io/metrics-server"
@@ -11,7 +15,12 @@ resource "helm_release" "metrics_server" {
     value = "--kubelet-insecure-tls"
   }
 
-  depends_on = [aws_eks_node_group.this]
+  lifecycle {
+    precondition {
+      condition     = local.node_group_ready != ""
+      error_message = "Node group ainda nao provisionado."
+    }
+  }
 }
 
 resource "helm_release" "argocd" {
@@ -31,8 +40,6 @@ resource "helm_release" "argocd" {
     name  = "server.service.type"
     value = var.argocd_expose_lb ? "LoadBalancer" : "ClusterIP"
   }
-
-  depends_on = [aws_eks_node_group.this]
 }
 
 data "kubernetes_service" "argocd_server" {

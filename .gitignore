@@ -1,17 +1,28 @@
-### JetBrains ###
 .idea/
 *.iml
 *.iws
 
-### Terraform ###
-**/.terraform/*
+.DS_Store
+
+**/.terraform/
+**/.terraform.tfstate.lock.info
+
 *.tfstate
 *.tfstate.*
-*.tfvars
+
 *.tfplan
-crash.log
-crash.*.log
+*.tfplan.*
+
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+crash.log
+crash.*.log
+
+*.pem

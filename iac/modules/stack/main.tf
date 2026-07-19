@@ -1,0 +1,123 @@
+locals {
+  name         = "${var.project}-${var.environment}"
+  cluster_name = "${var.project}-${var.environment}"
+
+  tags = merge(var.tags, {
+    Project     = var.project
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  })
+}
+
+data "aws_iam_role" "lab" {
+  name = "LabRole"
+}
+
+module "network" {
+  source = "../network"
+
+  name                 = local.name
+  tags                 = local.tags
+  cluster_name         = local.cluster_name
+  vpc_cidr             = var.vpc_cidr
+  azs                  = var.azs
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+}
+
+module "eks" {
+  source = "../eks"
+
+  name                = local.name
+  tags                = local.tags
+  cluster_name        = local.cluster_name
+  cluster_version     = var.cluster_version
+  public_subnet_ids   = module.network.public_subnet_ids
+  private_subnet_ids  = module.network.private_subnet_ids
+  node_instance_types = var.node_instance_types
+  node_desired_size   = var.node_desired_size
+  node_min_size       = var.node_min_size
+  node_max_size       = var.node_max_size
+  lab_role_arn        = data.aws_iam_role.lab.arn
+}
+
+module "addons" {
+  source = "../addons"
+
+  argocd_chart_version         = var.argocd_chart_version
+  metrics_server_chart_version = var.metrics_server_chart_version
+  argocd_expose_lb             = var.argocd_expose_lb
+  node_group_dependency        = module.eks.node_group
+}
+
+# Repositorio ECR da imagem da aplicacao (deploy no EKS).
+module "ecr_app" {
+  source = "../ecr"
+
+  repository_name = "${var.project}-app"
+  tags            = local.tags
+}
+
+# Repositorio ECR da imagem da Lambda de autenticacao.
+module "ecr_lambda" {
+  source = "../ecr"
+
+  repository_name = "${local.name}-auth-lambda"
+  tags            = local.tags
+}
+
+module "rds" {
+  source = "../rds"
+
+  name                       = local.name
+  tags                       = local.tags
+  vpc_id                     = module.network.vpc_id
+  private_subnet_ids         = module.network.private_subnet_ids
+  allowed_security_group_ids = [module.eks.cluster_security_group_id]
+  db_name                    = var.db_name
+  db_username                = var.db_username
+  db_instance_class          = var.db_instance_class
+  db_allocated_storage       = var.db_allocated_storage
+  db_engine_version          = var.db_engine_version
+}
+
+module "lambda_auth" {
+  source = "../lambda"
+
+  name               = "${local.name}-auth"
+  tags               = local.tags
+  image_uri          = "${module.ecr_lambda.repository_url}:${var.lambda_image_tag}"
+  lab_role_arn       = data.aws_iam_role.lab.arn
+  vpc_id             = module.network.vpc_id
+  private_subnet_ids = module.network.private_subnet_ids
+  memory_size        = var.lambda_memory_size
+  timeout            = var.lambda_timeout
+
+  db_host     = module.rds.address
+  db_port     = module.rds.port
+  db_name     = module.rds.db_name
+  db_user     = module.rds.username
+  db_password = module.rds.password
+
+  jwt_issuer             = var.jwt_issuer
+  jwt_expiration_seconds = var.jwt_expiration_seconds
+  extra_env              = var.lambda_extra_env
+}
+
+resource "aws_security_group_rule" "rds_from_lambda" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = module.rds.security_group_id
+  source_security_group_id = module.lambda_auth.security_group_id
+}
+
+module "api_gateway" {
+  source = "../api-gateway"
+
+  name                 = "${local.name}-auth"
+  tags                 = local.tags
+  lambda_function_name = module.lambda_auth.function_name
+  lambda_invoke_arn    = module.lambda_auth.invoke_arn
+}

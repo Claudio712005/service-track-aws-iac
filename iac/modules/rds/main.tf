@@ -4,26 +4,27 @@ resource "random_password" "db" {
 }
 
 resource "aws_db_subnet_group" "this" {
-  name       = "${local.name}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
-  tags       = local.tags
+  name       = "${var.name}-db-subnet-group"
+  subnet_ids = var.private_subnet_ids
+  tags       = var.tags
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${local.name}-rds-sg"
-  description = "PostgreSQL access from EKS nodes only"
-  vpc_id      = aws_vpc.this.id
+  name        = "${var.name}-rds-sg"
+  description = "PostgreSQL access from allowed security groups only"
+  vpc_id      = var.vpc_id
 
-  tags = merge(local.tags, { Name = "${local.name}-rds-sg" })
+  tags = merge(var.tags, { Name = "${var.name}-rds-sg" })
 }
 
 resource "aws_security_group_rule" "rds_ingress" {
+  count                    = length(var.allowed_security_group_ids)
   type                     = "ingress"
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
   security_group_id        = aws_security_group.rds.id
-  source_security_group_id = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  source_security_group_id = var.allowed_security_group_ids[count.index]
 }
 
 resource "aws_security_group_rule" "rds_egress" {
@@ -36,7 +37,7 @@ resource "aws_security_group_rule" "rds_egress" {
 }
 
 resource "aws_db_instance" "this" {
-  identifier             = "${local.name}-postgres"
+  identifier             = "${var.name}-postgres"
   engine                 = "postgres"
   engine_version         = var.db_engine_version
   instance_class         = var.db_instance_class
@@ -53,5 +54,5 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot    = true
   deletion_protection    = false
 
-  tags = local.tags
+  tags = var.tags
 }

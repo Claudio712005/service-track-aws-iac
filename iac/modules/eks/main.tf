@@ -1,25 +1,21 @@
-data "aws_iam_role" "lab" {
-  name = "LabRole"
-}
-
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   version  = var.cluster_version
-  role_arn = data.aws_iam_role.lab.arn
+  role_arn = var.lab_role_arn
 
   vpc_config {
-    subnet_ids             = concat(aws_subnet.public[*].id, aws_subnet.private[*].id)
+    subnet_ids             = concat(var.public_subnet_ids, var.private_subnet_ids)
     endpoint_public_access = true
   }
 
-  tags = local.tags
+  tags = var.tags
 }
 
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
-  node_group_name = "${local.name}-ng"
-  node_role_arn   = data.aws_iam_role.lab.arn
-  subnet_ids      = aws_subnet.private[*].id
+  node_group_name = "${var.name}-ng"
+  node_role_arn   = var.lab_role_arn
+  subnet_ids      = var.private_subnet_ids
   instance_types  = var.node_instance_types
 
   scaling_config {
@@ -28,5 +24,5 @@ resource "aws_eks_node_group" "this" {
     max_size     = var.node_max_size
   }
 
-  tags = local.tags
+  tags = var.tags
 }
