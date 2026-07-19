@@ -1,0 +1,273 @@
+name: Terraform
+
+run-name: "TF ${{ inputs.action }} -> ${{ inputs.env }} por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Acao do Terraform"
+        required: true
+        type: choice
+        default: plan
+        options:
+          - plan
+          - apply
+          - destroy
+      env:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        default: hml
+        options:
+          - hml
+          - prd
+      lambda_image_tag:
+        description: "Tag da imagem da Lambda no ECR"
+        required: false
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-${{ inputs.env }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: "1.10.5"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  prepare:
+    name: "1. Preparar (${{ inputs.env }})"
+    runs-on: ubuntu-latest
+    outputs:
+      workdir: ${{ steps.ctx.outputs.workdir }}
+      run_url: ${{ steps.ctx.outputs.run_url }}
+    steps:
+      - name: Resolver contexto
+        id: ctx
+        run: |
+          WORKDIR="iac/environments/${{ inputs.env }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "workdir=$WORKDIR" >> "$GITHUB_OUTPUT"
+          echo "run_url=$RUN_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo da execucao
+        run: |
+          {
+            echo "## Terraform — esteira"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Acao | \`${{ inputs.action }}\` |"
+            echo "| Ambiente | \`${{ inputs.env }}\` |"
+            echo "| Diretorio | \`${{ steps.ctx.outputs.workdir }}\` |"
+            echo "| Tag da imagem Lambda | \`${{ inputs.lambda_image_tag }}\` |"
+            echo "| Disparado por | @${{ github.actor }} |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Execucao | [ver run](${{ steps.ctx.outputs.run_url }}) |"
+            echo ""
+            echo "### Etapas"
+            echo "1. Preparar → 2. Validar → 3. Plan → 4. Apply / Destroy"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  validate:
+    name: "2. Validar"
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        id: fmt
+        run: terraform -chdir=iac fmt -recursive -check -diff
+
+      - name: terraform init (sem backend)
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init -backend=false
+
+      - name: terraform validate
+        id: validate
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} validate -no-color
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### 2. Validar"
+            echo "- fmt: ${{ steps.fmt.outcome }}"
+            echo "- validate: ${{ steps.validate.outcome }}"
+            echo "- [ver job](${{ needs.prepare.outputs.run_url }})"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  plan:
+    name: "3. Plan (${{ inputs.env }})"
+    needs: [prepare, validate]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
+
+      - name: terraform plan
+        id: plan
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA="-destroy"; fi
+          terraform -chdir=${{ needs.prepare.outputs.workdir }} plan $EXTRA -no-color \
+            -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" \
+            -out=tfplan.bin | tee plan.txt
+
+      - name: Publicar plano (artefato)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.env }}
+          path: ${{ needs.prepare.outputs.workdir }}/tfplan.bin
+          retention-days: 3
+
+      - name: Resumo do plano
+        if: always()
+        run: |
+          {
+            echo "### 3. Plan (\`${{ inputs.action }}\`)"
+            echo "- resultado: ${{ steps.plan.outcome }}"
+            echo ""
+            echo "<details><summary>Ver plano</summary>"
+            echo ""
+            echo '```'
+            tail -c 60000 plan.txt || true
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: "4. Apply (${{ inputs.env }})"
+    needs: [prepare, plan]
+    if: inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+      url: ${{ steps.outputs.outputs.api_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
+
+      - name: Baixar plano
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.env }}
+          path: ${{ needs.prepare.outputs.workdir }}
+
+      - name: terraform apply
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color tfplan.bin
+
+      - name: Coletar outputs
+        id: outputs
+        run: |
+          WD="${{ needs.prepare.outputs.workdir }}"
+          API_URL="$(terraform -chdir=$WD output -raw api_gateway_url 2>/dev/null || echo '')"
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo do apply
+        if: always()
+        run: |
+          WD="${{ needs.prepare.outputs.workdir }}"
+          {
+            echo "### 4. Apply concluido — \`${{ inputs.env }}\`"
+            echo ""
+            echo "| Output | Valor |"
+            echo "|---|---|"
+            echo "| API de autenticacao | ${{ steps.outputs.outputs.api_url }} |"
+            echo "| Cluster EKS | $(terraform -chdir=$WD output -raw cluster_name 2>/dev/null || echo '-') |"
+            echo "| ECR Lambda | $(terraform -chdir=$WD output -raw lambda_ecr_repository_url 2>/dev/null || echo '-') |"
+            echo "| RDS | $(terraform -chdir=$WD output -raw rds_endpoint 2>/dev/null || echo '-') |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  destroy:
+    name: "4. Destroy (${{ inputs.env }})"
+    needs: [prepare, plan]
+    if: inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Limpar load balancers orfaos
+        env:
+          CLUSTER_NAME: servicetrack-${{ inputs.env }}
+        run: bash scripts/aws-lb-cleanup.sh
+
+      - name: terraform init
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
+
+      - name: Baixar plano de destroy
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.env }}
+          path: ${{ needs.prepare.outputs.workdir }}
+
+      - name: terraform destroy (aplica plano)
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color tfplan.bin
+
+      - name: Resumo do destroy
+        if: always()
+        run: |
+          {
+            echo "### 4. Destroy — \`${{ inputs.env }}\`"
+            echo "- ambiente destruido."
+          } >> "$GITHUB_STEP_SUMMARY"
