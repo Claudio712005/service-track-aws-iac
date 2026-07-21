@@ -60,32 +60,46 @@ ambiente.
 - Docker (para buildar e publicar a imagem da Lambda)
 - Bucket S3 do backend já existente (ver `environments/<env>/versions.tf`)
 
-## Ordem de provisionamento da Lambda
+## Ordem de provisionamento da Lambda (bootstrap)
 
-A Lambda usa `package_type = "Image"`, então a imagem precisa existir no ECR antes do
-`apply` que cria a função. O fluxo é:
+A Lambda usa `package_type = "Image"` e imagens de container do Lambda só podem vir de
+um **ECR privado** da própria conta. Como o ECR é criado pelo mesmo Terraform, existe
+um problema de ovo-e-galinha no primeiro apply. A solução é fazer o apply em fases,
+usando uma imagem placeholder:
+
+1. Cria os repositórios ECR.
+2. Publica uma imagem placeholder (`:bootstrap`) no ECR da Lambda — puxa a base pública
+   `public.ecr.aws/lambda/java:21` e re-publica no ECR privado.
+3. Apply completo: a função é criada a partir de `:bootstrap`.
+4. O **código real** é entregue depois, fora do Terraform, via
+   `aws lambda update-function-code` (feito no CI do repositório
+   [service-track-lambda](https://github.com/Claudio712005/service-track-lambda)).
+
+O módulo da Lambda tem `lifecycle { ignore_changes = [image_uri] }`, então o Terraform
+gerencia a **infra** da função, não o **código**. Redeploys de código não exigem
+`terraform apply` — importante na conta de estudante, cujo login muda a cada laboratório.
+
+Na pipeline, o job de apply executa essas fases automaticamente. Manualmente:
 
 ```bash
 cd iac/environments/hml   # ou prd
-
-# 1. Cria primeiro os repositorios ECR (a imagem ainda nao existe)
 terraform init
-terraform apply -target=module.stack.module.ecr_lambda
 
-# 2. Build e push da imagem da Lambda (repositorio service-track-lambda)
-#    Dockerfile: https://github.com/Claudio712005/service-track-lambda
+# Fase 1: repositorios ECR
+terraform apply -target=module.stack.module.ecr_lambda -target=module.stack.module.ecr_app
+
+# Fase 2: imagem placeholder no ECR privado
 ECR_URL=$(terraform output -raw lambda_ecr_repository_url)
-aws ecr get-login-password --region us-east-1 \
-  | docker login --username AWS --password-stdin "${ECR_URL%/*}"
-docker build -t "$ECR_URL:latest" /caminho/service-track-lambda
-docker push "$ECR_URL:latest"
+bash ../../../scripts/lambda-bootstrap-image.sh "$ECR_URL" bootstrap
 
-# 3. Apply completo do ambiente
+# Fase 3: stack completo
 terraform apply
-```
 
-Nos applies seguintes, publique a nova imagem e rode `terraform apply` com
-`-var="lambda_image_tag=<tag>"` (ou atualize o `terraform.tfvars`).
+# Deploy do codigo real (normalmente feito pelo CI da Lambda):
+aws lambda update-function-code \
+  --function-name servicetrack-hml-auth \
+  --image-uri "$ECR_URL:<tag-da-imagem-real>"
+```
 
 ## Uso
 

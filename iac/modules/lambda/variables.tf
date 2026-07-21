@@ -9,7 +9,7 @@ variable "tags" {
 }
 
 variable "image_uri" {
-  description = "URI completa da imagem no ECR, incluindo a tag (ex.: <repo>:latest). A imagem deve existir antes do apply."
+  description = "URI da imagem placeholder (:bootstrap) usada apenas na criacao da funcao. O codigo real e publicado depois via 'aws lambda update-function-code' (ver lifecycle.ignore_changes no main.tf)."
   type        = string
 }
 

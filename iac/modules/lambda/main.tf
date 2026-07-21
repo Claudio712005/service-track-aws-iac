@@ -48,4 +48,8 @@ resource "aws_lambda_function" "this" {
   depends_on = [aws_cloudwatch_log_group.lambda]
 
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
 }

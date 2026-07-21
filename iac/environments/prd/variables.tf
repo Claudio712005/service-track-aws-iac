@@ -6,7 +6,7 @@ variable "aws_region" {
 variable "lambda_image_tag" {
   description = "Tag da imagem da Lambda de autenticacao no ECR."
   type        = string
-  default     = "latest"
+  default     = "bootstrap"
 }
 
 variable "lambda_extra_env" {

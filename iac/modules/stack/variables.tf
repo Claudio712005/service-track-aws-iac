@@ -92,7 +92,7 @@ variable "db_engine_version" {
 variable "lambda_image_tag" {
   description = "Tag da imagem da Lambda no ECR. A imagem deve ser publicada antes do apply."
   type        = string
-  default     = "latest"
+  default     = "bootstrap"
 }
 
 variable "lambda_memory_size" {

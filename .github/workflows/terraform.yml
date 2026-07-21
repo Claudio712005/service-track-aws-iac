@@ -193,14 +193,24 @@ jobs:
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
 
-      - name: Baixar plano
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ inputs.env }}
-          path: ${{ needs.prepare.outputs.workdir }}
+      - name: Apply fase 1 — ECR
+        run: |
+          WD="${{ needs.prepare.outputs.workdir }}"
+          terraform -chdir=$WD apply -no-color -auto-approve \
+            -target=module.stack.module.ecr_lambda \
+            -target=module.stack.module.ecr_app
 
-      - name: terraform apply
-        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color tfplan.bin
+      - name: Seed da imagem placeholder da Lambda
+        run: |
+          WD="${{ needs.prepare.outputs.workdir }}"
+          ECR_URL="$(terraform -chdir=$WD output -raw lambda_ecr_repository_url)"
+          bash scripts/lambda-bootstrap-image.sh "$ECR_URL" bootstrap
+
+      - name: Apply fase 3 — stack completo
+        run: |
+          WD="${{ needs.prepare.outputs.workdir }}"
+          terraform -chdir=$WD apply -no-color -auto-approve \
+            -var="lambda_image_tag=${{ inputs.lambda_image_tag }}"
 
       - name: Coletar outputs
         id: outputs

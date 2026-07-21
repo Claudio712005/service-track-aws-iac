@@ -1,5 +1,5 @@
 aws_region       = "us-east-1"
-lambda_image_tag = "latest"
+lambda_image_tag = "bootstrap"
 
 # lambda_extra_env = {
 #   MP_JWT_VERIFY_PUBLICKEY = "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
