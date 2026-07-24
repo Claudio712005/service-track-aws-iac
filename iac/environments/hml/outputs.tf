@@ -35,9 +35,17 @@ output "api_gateway_id" {
   value = module.stack.api_gateway_id
 }
 
-output "api_key_value" {
-  value     = module.stack.api_key_value
+output "api_consumers" {
+  value = module.stack.api_consumers
+}
+
+output "api_key_values" {
+  value     = module.stack.api_key_values
   sensitive = true
+}
+
+output "api_key_ids" {
+  value = module.stack.api_key_ids
 }
 
 output "app_backend_nlb_dns" {

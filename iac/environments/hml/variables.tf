@@ -14,3 +14,20 @@ variable "lambda_extra_env" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_jwt_authorizer" {
+  description = "Habilita o Lambda authorizer de JWT na borda. Ver ADR-007."
+  type        = bool
+  default     = false
+}
+
+variable "jwt_public_key" {
+  description = "Chave publica RS256 em PEM para o authorizer. Se null, usa lambda_extra_env.MP_JWT_VERIFY_PUBLICKEY."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+# HML nao expoe dominio customizado por decisao: o dominio clausilva.com.br fica
+# reservado para PRD e o orcamento de HML foi realocado para observabilidade.
+# Sem a variavel, ligar o dominio em HML exige mudanca de codigo revisavel.

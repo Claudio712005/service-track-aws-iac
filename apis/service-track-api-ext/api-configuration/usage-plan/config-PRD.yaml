@@ -7,6 +7,25 @@ usagePlan:
     limit: 200000
     period: MONTH
 
+consumers:
+  web:
+    description: Front-end web
+    enabled: true
+
+  mobile:
+    description: Aplicativo mobile
+    enabled: true
+
+  ci:
+    description: Contract test da pipeline
+    enabled: true
+    throttle:
+      rateLimit: 5
+      burstLimit: 10
+    quota:
+      limit: 1000
+      period: DAY
+
 stage:
   throttle:
     rateLimit: 200

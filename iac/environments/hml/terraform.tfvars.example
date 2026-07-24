@@ -1,7 +1,23 @@
 aws_region       = "us-east-1"
 lambda_image_tag = "bootstrap"
 
+# Chaves JWT RS256. Nunca versionar os valores reais.
 # lambda_extra_env = {
 #   MP_JWT_VERIFY_PUBLICKEY = "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
 #   SMALLRYE_JWT_SIGN_KEY   = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+# }
+
+# Valida o JWT tambem na borda, antes do backend. Ver ADR-007.
+# Reusa lambda_extra_env.MP_JWT_VERIFY_PUBLICKEY; sem ela o apply falha.
+# enable_jwt_authorizer = true
+
+# Chave publica so para o authorizer, se nao vier por lambda_extra_env.
+# jwt_public_key = "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+
+# Dominio proprio. A zona e criada UMA VEZ por iac/bootstrap/dns e nunca
+# destruida junto com o ambiente. Ver ADR-008.
+# custom_domain = {
+#   domain_name      = "hml.api.clausilva.com.br"
+#   hosted_zone_name = "api.clausilva.com.br"
+#   base_path        = "service-track/v1"
 # }

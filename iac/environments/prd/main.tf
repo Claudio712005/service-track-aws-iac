@@ -24,4 +24,14 @@ module "stack" {
   lambda_extra_env   = var.lambda_extra_env
 
   argocd_expose_lb = true
+
+  enable_jwt_authorizer = var.enable_jwt_authorizer
+  jwt_public_key        = var.jwt_public_key
+  # Ligado so depois que a delegacao NS existe no Registro.br. A esteira
+  # dns-publish.yml verifica a delegacao e reaplica com true. Ver ADR-008.
+  custom_domain = var.enable_custom_domain ? {
+    domain_name      = var.api_domain_name
+    hosted_zone_name = var.api_hosted_zone_name
+    base_path        = var.api_base_path
+  } : null
 }

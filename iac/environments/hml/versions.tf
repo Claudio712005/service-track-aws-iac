@@ -22,5 +22,13 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.30"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
+    }
   }
 }

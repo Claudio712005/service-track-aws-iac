@@ -23,5 +23,10 @@ module "stack" {
   lambda_timeout     = 30
   lambda_extra_env   = var.lambda_extra_env
 
-  argocd_expose_lb = true
+  # Sem LoadBalancer para o ArgoCD em HML: economiza ~US$ 16/mes.
+  # Acesso por: kubectl -n argocd port-forward svc/argocd-server 8080:80
+  argocd_expose_lb = false
+
+  enable_jwt_authorizer = var.enable_jwt_authorizer
+  jwt_public_key        = var.jwt_public_key
 }

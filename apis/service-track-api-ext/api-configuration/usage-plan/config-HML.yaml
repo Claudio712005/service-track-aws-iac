@@ -1,21 +1,41 @@
 usagePlan:
   throttle:
-    rateLimit: 20  
-    burstLimit: 40  
+    rateLimit: 20
+    burstLimit: 40
 
   quota:
     limit: 10000
     period: DAY
+
+consumers:
+  web:
+    description: Front-end web
+    enabled: true
+
+  mobile:
+    description: Aplicativo mobile
+    enabled: true
+
+  ci:
+    description: Contract test da pipeline
+    enabled: true
 
 stage:
   throttle:
     rateLimit: 50
     burstLimit: 100
 
-  detailedMetrics: true
+  # Desligado para conter custo: metrica detalhada e cobrada como metrica
+  # customizada do CloudWatch (~US$ 0,30/metrica/mes). Sao 5 metricas por metodo
+  # e a API tem 85 metodos (49 operacoes + 36 OPTIONS), entao o teto passa de
+  # US$ 100/mes com cobertura total. As metricas agregadas por stage continuam
+  # gratuitas e bastam para HML. Orcamento realocado para o Datadog.
+  detailedMetrics: false
 
+  # Log de execucao continua em INFO: a ingestao e cobrada por GB e o volume de
+  # HML e proximo de zero, entao aqui o custo e desprezivel e o valor de debug e alto.
   loggingLevel: INFO
 
   dataTrace: false
 
-  accessLogRetentionDays: 7
+  accessLogRetentionDays: 3
