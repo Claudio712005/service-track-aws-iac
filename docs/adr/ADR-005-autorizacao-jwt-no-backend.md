@@ -1,7 +1,13 @@
 # ADR-005 — Sem authorizer no gateway: JWT continua no backend, API Key controla consumo
 
-- **Status:** aceito
+- **Status:** aceito, revisado por [ADR-007](ADR-007-lambda-authorizer-opcional.md)
 - **Data:** 2026-07-23
+
+> **Revisão:** o ADR-007 implementou o Lambda authorizer como recurso **opcional**,
+> resolvendo a objeção de custo de bootstrap descrita abaixo (o authorizer é
+> empacotado como ZIP, não como imagem de container). O padrão continua sendo
+> **sem authorizer**, e a justificativa desta decisão segue valendo para o
+> comportamento default.
 
 ## Contexto
 

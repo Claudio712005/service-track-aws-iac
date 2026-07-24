@@ -7,7 +7,11 @@
   [003](../adr/ADR-003-integracao-backend-eks-vpc-link.md),
   [004](../adr/ADR-004-fronteira-ext-terraform.md),
   [005](../adr/ADR-005-autorizacao-jwt-no-backend.md),
-  [006](../adr/ADR-006-ambientes-efemeros-e-conta-educacional.md)
+  [006](../adr/ADR-006-ambientes-efemeros-e-conta-educacional.md),
+  [007](../adr/ADR-007-lambda-authorizer-opcional.md),
+  [008](../adr/ADR-008-dominio-customizado-opcional.md),
+  [009](../adr/ADR-009-multiplas-api-keys-por-consumidor.md),
+  [010](../adr/ADR-010-contract-testing-na-pipeline.md)
 
 ## 1. Problema
 
@@ -137,8 +141,10 @@ Nada é importado à mão. Nada é clicado no console.
 Muda a cada recriação (por design, não por limitação):
 
 - o **ID da API**, logo a URL — output `api_gateway_url`;
-- o **valor da API key** — output `api_key_value`
-  ([ADR-006](../adr/ADR-006-ambientes-efemeros-e-conta-educacional.md), seção 3);
+- o **valor das API keys** — output `api_key_values`, um por consumidor
+  ([ADR-006](../adr/ADR-006-ambientes-efemeros-e-conta-educacional.md), seção 3).
+  Com domínio customizado ([ADR-008](../adr/ADR-008-dominio-customizado-opcional.md))
+  a URL deixa de mudar;
 - o **DNS do NLB** — resolvido automaticamente, pois é injetado no contrato no
   momento do apply.
 
@@ -154,14 +160,22 @@ Muda a cada recriação (por design, não por limitação):
 
 ## 8. Evolução possível
 
-- **Domínio customizado** (`aws_api_gateway_domain_name` + ACM + Route53) com base
-  path `/service-track/v1`, recuperando a intenção do arquivo Axway original. Não
-  feito por custo de zona hospedada e por não existir domínio.
-- **Lambda authorizer** se houver necessidade de rejeitar JWT inválido na borda
-  ([ADR-005](../adr/ADR-005-autorizacao-jwt-no-backend.md)).
-- **Múltiplas API keys** (uma por consumidor: front web, mobile, parceiro), já
-  suportado pelo usage plan — basta mais um par
-  `aws_api_gateway_api_key` + `usage_plan_key`.
-- **Contract testing** no CI, comparando o `openApi.yaml` com o contrato gerado
-  pela aplicação, para detectar divergência entre gateway e backend.
+### Implementado depois da versão inicial
+
+| Item | Estado | ADR |
+|---|---|---|
+| Domínio customizado com base path `/service-track/v1` | opcional, default desligado | [008](../adr/ADR-008-dominio-customizado-opcional.md) |
+| Múltiplas API keys, uma por consumidor | ativo | [009](../adr/ADR-009-multiplas-api-keys-por-consumidor.md) |
+| Lambda authorizer de JWT na borda | opcional, default desligado | [007](../adr/ADR-007-lambda-authorizer-opcional.md) |
+| Contract testing na pipeline | ativo (estático em push, dinâmico pós-apply) | [010](../adr/ADR-010-contract-testing-na-pipeline.md) |
+
+### Ainda em aberto
+
+- **Contract testing provider × consumer de verdade**: comparar o `openApi.yaml`
+  com o contrato gerado pela aplicação no EKS. Depende de a aplicação publicar seu
+  OpenAPI num local estável — hoje ele vive em outro repositório.
+- **Fechar o endpoint `execute-api`** quando o domínio customizado estiver ativo,
+  via resource policy, para ter um único ponto de entrada.
 - **WAF** se a API passar a receber tráfego real não confiável.
+- **Chave estável entre recriações** (Secrets Manager) se algum consumidor não
+  puder reconfigurar a API key a cada ambiente novo.
