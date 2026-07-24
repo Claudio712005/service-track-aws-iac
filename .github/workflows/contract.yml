@@ -1,0 +1,133 @@
+name: Contract
+
+run-name: "Contract check - ${{ github.event_name }} por @${{ github.actor }}"
+
+on:
+  push:
+    paths:
+      - "apis/**"
+      - "iac/modules/api-gateway/**"
+      - "iac/modules/lambda-authorizer/**"
+      - "scripts/validate-openapi.sh"
+      - ".github/workflows/contract.yml"
+  pull_request:
+    paths:
+      - "apis/**"
+      - "iac/modules/api-gateway/**"
+      - "iac/modules/lambda-authorizer/**"
+      - "scripts/validate-openapi.sh"
+      - ".github/workflows/contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  openapi:
+    name: "Contrato OpenAPI"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar openApi.yaml
+        id: spec
+        run: bash scripts/validate-openapi.sh
+
+      - name: Conferir consistencia entre HML e PRD
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys, yaml
+          base = pathlib.Path("apis/service-track-api-ext/api-configuration")
+
+          def keys(d, prefix=""):
+              out = set()
+              for k, v in d.items():
+                  out.add(prefix + k)
+                  if isinstance(v, dict):
+                      out |= keys(v, prefix + k + ".")
+              return out
+
+          erros = []
+          for group in ("cors", "usage-plan"):
+              h = yaml.safe_load((base / group / "config-HML.yaml").read_text())
+              p = yaml.safe_load((base / group / "config-PRD.yaml").read_text())
+              # consumers pode divergir de proposito (limites dedicados por ambiente)
+              hk = {k for k in keys(h) if not k.startswith("consumers.")}
+              pk = {k for k in keys(p) if not k.startswith("consumers.")}
+              if hk != pk:
+                  erros.append(f"{group}: chaves divergentes {hk ^ pk}")
+              if set(h.get("consumers", {})) != set(p.get("consumers", {})):
+                  erros.append(
+                      f"{group}: consumidores divergentes "
+                      f"{set(h.get('consumers', {})) ^ set(p.get('consumers', {}))}"
+                  )
+          if erros:
+              sys.exit("\n".join(erros))
+          print("HML e PRD consistentes")
+          PY
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Contrato OpenAPI"
+            echo "- validacao: ${{ steps.spec.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  authorizer:
+    name: "Authorizer JWT"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: iac/modules/lambda-authorizer/src/go.sum
+
+      - name: go vet
+        working-directory: iac/modules/lambda-authorizer/src
+        run: go vet ./...
+
+      - name: Testes do authorizer
+        id: tests
+        working-directory: iac/modules/lambda-authorizer/src
+        run: go test -v ./...
+
+      - name: Build cross-compile (arm64)
+        id: build
+        run: bash iac/modules/lambda-authorizer/build.sh
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Authorizer JWT (Go)"
+            echo "- testes: ${{ steps.tests.outcome }}"
+            echo "- build arm64: ${{ steps.build.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  terraform:
+    name: "Terraform fmt e validate"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform -chdir=iac fmt -recursive -check -diff
+
+      - name: terraform validate (hml e prd)
+        run: |
+          for env in hml prd; do
+            terraform -chdir="iac/environments/$env" init -backend=false -no-color
+            terraform -chdir="iac/environments/$env" validate -no-color
+          done
