@@ -1,0 +1,149 @@
+name: DNS (publicar dominio em PRD)
+
+run-name: "Publicar api.clausilva.com.br por @${{ github.actor }}"
+
+# Segunda fase da publicacao do dominio, separada porque a delegacao NS no
+# Registro.br e manual (sem API publica).
+#
+#   1. DNS (zona persistente)  -> cria a zona, imprime os NS
+#   2. [manual] Registro.br    -> cadastra os NS
+#   3. ESTA esteira            -> confere a delegacao e liga o dominio em PRD
+#
+# Idempotente: pode rodar de novo a qualquer momento.
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_delegation_check:
+        description: "Ignorar a checagem de delegacao (nao recomendado: o ACM pendura ate o timeout)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-prd
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: "1.10.5"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  WORKDIR: iac/environments/prd
+
+jobs:
+  publish:
+    name: "Publicar dominio"
+    runs-on: ubuntu-latest
+    environment:
+      name: prd
+      url: ${{ steps.outputs.outputs.domain_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: iac/modules/lambda-authorizer/src/go.sum
+
+      - name: Instalar dig
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dnsutils
+
+      - name: Verificar delegacao no Registro.br
+        id: delegation
+        run: |
+          eval "$(bash scripts/dns-zone-state.sh)"
+          {
+            echo "zone=$ZONE_NAME"
+            echo "exists=$ZONE_EXISTS"
+            echo "delegated=$DELEGATED"
+            echo "ns<<EOF"; printf '%s\n' $NAME_SERVERS; echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$ZONE_EXISTS" != "true" ]; then
+            echo "::error::Hosted zone nao existe. Rode antes a esteira 'DNS (zona persistente)' com action=apply."
+            exit 1
+          fi
+          if [ "$DELEGATED" != "true" ] && [ "${{ inputs.skip_delegation_check }}" != "true" ]; then
+            echo "::error::Delegacao NS de $ZONE_NAME ainda nao ativa. Configure no Registro.br e rode de novo."
+            exit 1
+          fi
+          echo "delegacao ok para $ZONE_NAME"
+
+      - name: terraform init
+        run: terraform -chdir=$WORKDIR init
+
+      # A emissao do certificado ACM espera a validacao DNS propagar; por isso o
+      # timeout generoso. Todo o resto do stack ja existe deste apply anterior.
+      - name: terraform apply (com dominio)
+        id: apply
+        timeout-minutes: 30
+        run: |
+          terraform -chdir=$WORKDIR apply -no-color -auto-approve \
+            -var="enable_custom_domain=true"
+
+      - name: Coletar outputs
+        id: outputs
+        run: |
+          DOMAIN_URL="$(terraform -chdir=$WORKDIR output -raw api_custom_domain_url 2>/dev/null || echo '')"
+          echo "domain_url=$DOMAIN_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Contract test no dominio customizado
+        id: contract
+        env:
+          STAGE_NAME: prd
+        run: |
+          BASE="${{ steps.outputs.outputs.domain_url }}"
+          KEY="$(terraform -chdir=$WORKDIR output -json api_key_values | jq -r '.ci')"
+          REST_API_ID="$(terraform -chdir=$WORKDIR output -raw api_gateway_id)"
+          export REST_API_ID
+          bash scripts/contract-test.sh "$BASE" "$KEY"
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "## Dominio customizado - PRD"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Zona | \`${{ steps.delegation.outputs.zone }}\` |"
+            echo "| Delegacao | ${{ steps.delegation.outputs.delegated == 'true' && 'ativa' || 'NAO verificada' }} |"
+            echo "| Apply | ${{ steps.apply.outcome }} |"
+            echo "| URL | ${{ steps.outputs.outputs.domain_url }} |"
+            echo "| Contract test | ${{ steps.contract.outcome }} |"
+            echo ""
+            if [ "${{ steps.apply.outcome }}" = "success" ]; then
+              echo "A partir de agora a URL e estavel entre recriacoes de PRD, e a"
+              echo "esteira Terraform detecta a delegacao sozinha (custom_domain: auto)."
+              echo "O Registro.br nao precisa mais ser tocado."
+            else
+              echo "### Se o apply falhou na validacao do certificado"
+              echo ""
+              echo "Quase sempre e delegacao ainda nao propagada. Confirme com:"
+              echo ""
+              echo '```'
+              echo "dig +short NS ${{ steps.delegation.outputs.zone }}"
+              echo '```'
+              echo ""
+              echo "Deve responder os NS da hosted zone. Se responder vazio ou os"
+              echo "servidores do Registro.br, a delegacao nao esta ativa: revise as"
+              echo "entradas NS no painel e aguarde a propagacao."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
