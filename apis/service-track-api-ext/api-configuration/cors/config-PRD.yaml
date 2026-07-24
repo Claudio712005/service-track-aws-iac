@@ -1,0 +1,6 @@
+cors:
+  allowOrigin: "*"
+  allowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  allowHeaders: "Content-Type,Authorization,x-api-key"
+  maxAge: 3600
+  allowCredentials: false

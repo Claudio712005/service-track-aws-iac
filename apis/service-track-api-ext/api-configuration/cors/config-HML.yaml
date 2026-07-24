@@ -1,0 +1,6 @@
+cors:
+  allowOrigin: "*"
+  allowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  allowHeaders: "Content-Type,Authorization,x-api-key,X-Amz-Date,X-Amz-Security-Token"
+  maxAge: 300
+  allowCredentials: false

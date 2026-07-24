@@ -1,0 +1,21 @@
+usagePlan:
+  throttle:
+    rateLimit: 20  
+    burstLimit: 40  
+
+  quota:
+    limit: 10000
+    period: DAY
+
+stage:
+  throttle:
+    rateLimit: 50
+    burstLimit: 100
+
+  detailedMetrics: true
+
+  loggingLevel: INFO
+
+  dataTrace: false
+
+  accessLogRetentionDays: 7
