@@ -119,3 +119,33 @@ variable "lambda_extra_env" {
   type        = map(string)
   default     = {}
 }
+
+# --- exposicao da API ---------------------------------------------------------
+
+variable "app_node_port" {
+  description = <<-EOT
+    NodePort em que o Service da aplicacao e exposto no EKS. E o contrato entre
+    este repositorio e os manifestos do Kubernetes: o Service precisa ser
+    type=NodePort com este nodePort para o NLB do API Gateway encontrar os pods.
+  EOT
+  type        = number
+  default     = 30080
+}
+
+variable "app_health_check_protocol" {
+  description = "Health check do target group do NLB: TCP (default) ou HTTP."
+  type        = string
+  default     = "TCP"
+}
+
+variable "app_health_check_path" {
+  description = "Rota de health check, usada apenas com app_health_check_protocol = HTTP."
+  type        = string
+  default     = "/"
+}
+
+variable "enable_api_access_logs" {
+  description = "Habilita access/execution logs do API Gateway no CloudWatch. Ver ADR-006."
+  type        = bool
+  default     = true
+}

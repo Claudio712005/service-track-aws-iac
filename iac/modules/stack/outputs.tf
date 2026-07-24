@@ -45,8 +45,24 @@ output "lambda_function_name" {
 }
 
 output "api_gateway_url" {
-  description = "URL publica do endpoint de autenticacao (ex.: <url>/autenticacao/login)."
+  description = "URL base publica da API, com o stage (ex.: <url>/autenticacao)."
   value       = module.api_gateway.api_endpoint
+}
+
+output "api_gateway_id" {
+  description = "ID do REST API. Preenche a variavel apiId do servers[] do openApi.yaml."
+  value       = module.api_gateway.api_id
+}
+
+output "api_key_value" {
+  description = "API key do ambiente. Enviar no header x-api-key."
+  value       = module.api_gateway.api_key_value
+  sensitive   = true
+}
+
+output "app_backend_nlb_dns" {
+  description = "DNS do NLB interno que expoe a aplicacao do EKS ao API Gateway."
+  value       = module.vpc_link.nlb_dns_name
 }
 
 output "argocd_url" {

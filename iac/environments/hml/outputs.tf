@@ -31,6 +31,19 @@ output "api_gateway_url" {
   value = module.stack.api_gateway_url
 }
 
+output "api_gateway_id" {
+  value = module.stack.api_gateway_id
+}
+
+output "api_key_value" {
+  value     = module.stack.api_key_value
+  sensitive = true
+}
+
+output "app_backend_nlb_dns" {
+  value = module.stack.app_backend_nlb_dns
+}
+
 output "argocd_url" {
   value = module.stack.argocd_url
 }

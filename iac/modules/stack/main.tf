@@ -7,6 +7,11 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   })
+
+  # Contrato de exposicao externa da API (EXT), versionado fora do iac/.
+  # A partir de iac/modules/stack, tres niveis acima e a raiz do repositorio.
+  api_ext_dir = "${path.module}/../../../apis/service-track-api-ext"
+  env_suffix  = upper(var.environment)
 }
 
 data "aws_iam_role" "lab" {
@@ -113,11 +118,41 @@ resource "aws_security_group_rule" "rds_from_lambda" {
   source_security_group_id = module.lambda_auth.security_group_id
 }
 
+# Caminho privado do API Gateway ate a aplicacao no EKS.
+module "vpc_link" {
+  source = "../vpc-link"
+
+  name                   = local.name
+  tags                   = local.tags
+  vpc_id                 = module.network.vpc_id
+  vpc_cidr               = var.vpc_cidr
+  private_subnet_ids     = module.network.private_subnet_ids
+  node_asg_names         = module.eks.node_group_asg_names
+  node_security_group_id = module.eks.cluster_security_group_id
+  node_port              = var.app_node_port
+  health_check_protocol  = var.app_health_check_protocol
+  health_check_path      = var.app_health_check_path
+}
+
+# API Gateway REST definido pelo contrato EXT. Roteia /autenticacao* para a
+# Lambda e o restante para a aplicacao no EKS via VPC Link.
 module "api_gateway" {
   source = "../api-gateway"
 
-  name                 = "${local.name}-auth"
-  tags                 = local.tags
-  lambda_function_name = module.lambda_auth.function_name
-  lambda_invoke_arn    = module.lambda_auth.invoke_arn
+  name        = local.name
+  environment = var.environment
+  tags        = local.tags
+
+  openapi_path           = "${local.api_ext_dir}/openApi.yaml"
+  cors_config_path       = "${local.api_ext_dir}/api-configuration/cors/config-${local.env_suffix}.yaml"
+  usage_plan_config_path = "${local.api_ext_dir}/api-configuration/usage-plan/config-${local.env_suffix}.yaml"
+
+  auth_lambda_function_name = module.lambda_auth.function_name
+  auth_lambda_invoke_arn    = module.lambda_auth.invoke_arn
+
+  app_backend_host = module.vpc_link.nlb_dns_name
+  vpc_link_id      = module.vpc_link.vpc_link_id
+
+  enable_access_logs  = var.enable_api_access_logs
+  cloudwatch_role_arn = data.aws_iam_role.lab.arn
 }

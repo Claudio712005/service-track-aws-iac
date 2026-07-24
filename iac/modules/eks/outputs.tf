@@ -19,3 +19,8 @@ output "node_group" {
   description = "Node group, para uso em depends_on de addons."
   value       = aws_eks_node_group.this.id
 }
+
+output "node_group_asg_names" {
+  description = "ASGs criados pelo node group, para registrar os nodes no target group do NLB."
+  value       = [for asg in aws_eks_node_group.this.resources[0].autoscaling_groups : asg.name]
+}
