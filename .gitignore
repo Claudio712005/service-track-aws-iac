@@ -26,3 +26,8 @@ crash.log
 crash.*.log
 
 *.pem
+
+iac/modules/lambda-authorizer/build/
+
+__pycache__/
+*.pyc
