@@ -1,0 +1,2436 @@
+openapi: 3.0.3
+
+info:
+  title: ServiceTrack API
+  version: 1.0.0
+
+servers:
+- url: https://{apiId}.execute-api.{region}.amazonaws.com/{stage}
+  description: Endpoint regional do API Gateway. Os valores reais saem dos outputs
+    do Terraform (api_gateway_url) e mudam a cada recriacao do ambiente.
+  variables:
+    apiId:
+      default: apiid
+      description: ID gerado pelo API Gateway (output api_gateway_id).
+    region:
+      default: us-east-1
+    stage:
+      default: hml
+      enum:
+      - hml
+      - prd
+
+security:
+- ApiKeyAuth: []
+
+x-amazon-apigateway-api-key-source: HEADER
+
+x-amazon-apigateway-request-validators:
+  full:
+    validateRequestBody: true
+    validateRequestParameters: true
+
+x-amazon-apigateway-request-validator: full
+
+paths:
+  /autenticacao:
+    post:
+      operationId: login
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '500': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${auth_lambda_uri}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /autenticacao/reset-senha:
+    post:
+      operationId: resetarSenha
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetarSenhaRequest'
+      responses:
+        '204': { description: No Content }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${auth_lambda_uri}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /clientes:
+    post:
+      operationId: criarCliente
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CadastrarClienteRequest'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '409': { $ref: '#/components/responses/Erro' }
+        '500': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/clientes
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /clientes/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarCliente
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/clientes/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    put:
+      operationId: atualizarCliente
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizarClienteRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PUT
+        uri: http://${app_backend_host}/clientes/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    delete:
+      operationId: desativarCliente
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '204': { description: No Content }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: DELETE
+        uri: http://${app_backend_host}/clientes/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /mecanicos:
+    get:
+      operationId: listarMecanicos
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MecanicoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/mecanicos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    post:
+      operationId: criarMecanico
+      security:
+      - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CadastrarMecanicoRequest'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MecanicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '409': { $ref: '#/components/responses/Erro' }
+        '500': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/mecanicos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /mecanicos/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarMecanico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MecanicoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/mecanicos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    put:
+      operationId: atualizarMecanico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizarMecanicoRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MecanicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PUT
+        uri: http://${app_backend_host}/mecanicos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /veiculos:
+    get:
+      operationId: listarVeiculos
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DadosVeiculoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/veiculos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    post:
+      operationId: criarVeiculo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CadastrarVeiculoRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DadosVeiculoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/veiculos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /veiculos/imagens/sugestoes:
+    get:
+      operationId: buscarSugestoesImagens
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      parameters:
+      - name: marca
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: modelo
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SugestoesImagensResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/veiculos/imagens/sugestoes
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /veiculos/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarVeiculo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DadosVeiculoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/veiculos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    put:
+      operationId: atualizarVeiculo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizarVeiculoRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DadosVeiculoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PUT
+        uri: http://${app_backend_host}/veiculos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    delete:
+      operationId: excluirVeiculo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '204': { description: No Content }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: DELETE
+        uri: http://${app_backend_host}/veiculos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /servicos:
+    get:
+      operationId: listarServicos
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServicoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/servicos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    post:
+      operationId: criarServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarServicoRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/servicos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /servicos/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/servicos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    put:
+      operationId: atualizarServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizarServicoRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PUT
+        uri: http://${app_backend_host}/servicos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    delete:
+      operationId: removerServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '204': { description: No Content }
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: DELETE
+        uri: http://${app_backend_host}/servicos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /servicos/{id}/tempo-medio-conclusao:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarTempoMedioConclusao
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      parameters:
+      - name: unidade
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - SEGUNDOS
+          - MINUTOS
+          - HORAS
+          - DIAS
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TempoMedioConclusaoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/servicos/{id}/tempo-medio-conclusao
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /insumos:
+    get:
+      operationId: listarInsumos
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InsumoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/insumos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    post:
+      operationId: criarInsumo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarInsumoRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsumoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/insumos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /insumos/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarInsumo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsumoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/insumos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    put:
+      operationId: atualizarInsumo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizarInsumoRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsumoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PUT
+        uri: http://${app_backend_host}/insumos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    delete:
+      operationId: removerInsumo
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '204': { description: No Content }
+        '401': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: DELETE
+        uri: http://${app_backend_host}/insumos/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /catalogo/servicos:
+    get:
+      operationId: listarCatalogoServicos
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogoServicoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/catalogo/servicos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /catalogo/insumos:
+    get:
+      operationId: listarCatalogoInsumos
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogoInsumoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/catalogo/insumos
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico:
+    post:
+      operationId: criarOrdemServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrdemServicoRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumoOrdemServicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/completa:
+    post:
+      operationId: criarOrdemServicoCompleta
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CriarOrdemServicoCompletaRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdemServicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/completa
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/lista:
+    get:
+      operationId: listarOrdensServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/StatusOrdemServico'
+      - name: clienteId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: mecanicoId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageOrdemServicoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/ordem-servico/lista
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/orcamento/aprovacao:
+    get:
+      operationId: aprovarOrcamentoViaEmail
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/TokenOrcamento'
+      responses:
+        '200': { $ref: '#/components/responses/Html' }
+        '400': { $ref: '#/components/responses/Html' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/ordem-servico/orcamento/aprovacao
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/orcamento/reprovacao:
+    get:
+      operationId: reprovarOrcamentoViaEmail
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/TokenOrcamento'
+      responses:
+        '200': { $ref: '#/components/responses/Html' }
+        '400': { $ref: '#/components/responses/Html' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/ordem-servico/orcamento/reprovacao
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarOrdemServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdemServicoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/ordem-servico/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/diagnostico:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    post:
+      operationId: enviarParaDiagnostico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/ResumoOrdemServico' }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/{id}/diagnostico
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/diagnostico/itens:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    put:
+      operationId: associarItensOrdemServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssociarItensRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdemServicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PUT
+        uri: http://${app_backend_host}/ordem-servico/{id}/diagnostico/itens
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/orcamento:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    post:
+      operationId: gerarOrcamento
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GerarOrcamentoRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdemServicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/{id}/orcamento
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/orcamento/aprovacao:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    post:
+      operationId: aprovarOrcamento
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/ResumoOrdemServico' }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/{id}/orcamento/aprovacao
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/orcamento/reprovacao:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    post:
+      operationId: reprovarOrcamento
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReprovarOrcamentoRequest'
+      responses:
+        '200': { $ref: '#/components/responses/ResumoOrdemServico' }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/{id}/orcamento/reprovacao
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/cancelamento:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    post:
+      operationId: cancelarOrdemServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelarOsRequest'
+      responses:
+        '200': { $ref: '#/components/responses/ResumoOrdemServico' }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/{id}/cancelamento
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/finalizacao:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    post:
+      operationId: finalizarOrdemServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/ResumoOrdemServico' }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/{id}/finalizacao
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/entrega:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    post:
+      operationId: entregarOrdemServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200': { $ref: '#/components/responses/ResumoOrdemServico' }
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: POST
+        uri: http://${app_backend_host}/ordem-servico/{id}/entrega
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /ordem-servico/{id}/itens/{itemId}/concluir:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    - $ref: '#/components/parameters/ItemId'
+    patch:
+      operationId: concluirItemServico
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConcluirItemServicoRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdemServicoResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PATCH
+        uri: http://${app_backend_host}/ordem-servico/{id}/itens/{itemId}/concluir
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+          integration.request.path.itemId: method.request.path.itemId
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /dashboard/clientes/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarDashboardCliente
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardClienteResponse'
+        '400': { $ref: '#/components/responses/Erro' }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+        '500': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/dashboard/clientes/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  # ---------------------------------------------------------------------------
+  # Notificacoes
+  # ---------------------------------------------------------------------------
+  /notificacoes:
+    get:
+      operationId: listarNotificacoes
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      parameters:
+      - name: visualizada
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageNotificacaoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/notificacoes
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /notificacoes/nao-lidas/contagem:
+    get:
+      operationId: contarNotificacoesNaoLidas
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContadorNaoLidasResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/notificacoes/nao-lidas/contagem
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /notificacoes/{id}:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    get:
+      operationId: buscarNotificacao
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificacaoResponse'
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: GET
+        uri: http://${app_backend_host}/notificacoes/{id}
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+  /notificacoes/{id}/visualizar:
+    parameters:
+    - $ref: '#/components/parameters/Id'
+    patch:
+      operationId: marcarNotificacaoVisualizada
+      security:
+      - ApiKeyAuth: []
+        bearerAuth: []
+      responses:
+        '204': { description: No Content }
+        '401': { $ref: '#/components/responses/Erro' }
+        '403': { $ref: '#/components/responses/Erro' }
+        '404': { $ref: '#/components/responses/Erro' }
+      x-amazon-apigateway-integration:
+        type: http_proxy
+        httpMethod: PATCH
+        uri: http://${app_backend_host}/notificacoes/{id}/visualizar
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
+        requestParameters:
+          integration.request.path.id: method.request.path.id
+        passthroughBehavior: when_no_match
+    options: ${cors_options}
+
+components:
+
+  securitySchemes:
+
+    ApiKeyAuth:
+      type: apiKey
+      name: x-api-key
+      in: header
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TokenOrcamento:
+      name: token
+      in: query
+      required: true
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    Erro:
+      description: Erro
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResponse'
+    ResumoOrdemServico:
+      description: OK
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResumoOrdemServicoResponse'
+    Html:
+      description: Pagina HTML de resultado
+      content:
+        text/html:
+          schema:
+            type: string
+
+  schemas:
+
+    ErroResponse:
+      type: object
+      properties:
+        mensagem:
+          type: string
+        detalhe:
+          type: string
+
+    StatusOrdemServico:
+      type: string
+      enum:
+      - RECEBIDA
+      - EM_DIAGNOSTICO
+      - AGUARDANDO_APROVACAO
+      - EM_EXECUCAO
+      - FINALIZADA
+      - ENTREGUE
+      - CANCELADA
+
+    NivelMecanico:
+      type: string
+      enum:
+      - JUNIOR
+      - PLENO
+      - SENIOR
+
+    CadastrarClienteRequest:
+      type: object
+      required:
+      - nome
+      - email
+      - senha
+      - dataNascimento
+      - telefone
+      - cpf
+      properties:
+        nome:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        senha:
+          type: string
+          format: password
+          minLength: 6
+        dataNascimento:
+          type: string
+          format: date
+        telefone:
+          type: string
+          minLength: 10
+          maxLength: 11
+        cpf:
+          type: string
+          minLength: 11
+          maxLength: 14
+
+    AtualizarClienteRequest:
+      type: object
+      required:
+      - nome
+      - email
+      - telefone
+      properties:
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+        telefone:
+          type: string
+
+    ClienteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        email:
+          type: string
+        cpf:
+          type: string
+        telefone:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        ativo:
+          type: boolean
+
+    CadastrarMecanicoRequest:
+      type: object
+      required:
+      - nome
+      - email
+      - senha
+      - dataNascimento
+      - telefone
+      - cpf
+      - nivel
+      - valorHora
+      properties:
+        nome:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        senha:
+          type: string
+          format: password
+          minLength: 6
+        dataNascimento:
+          type: string
+          format: date
+        telefone:
+          type: string
+          minLength: 10
+          maxLength: 11
+        cpf:
+          type: string
+          minLength: 11
+          maxLength: 14
+        nivel:
+          $ref: '#/components/schemas/NivelMecanico'
+        valorHora:
+          type: number
+          format: double
+          minimum: 0.01
+
+    AtualizarMecanicoRequest:
+      type: object
+      required:
+      - nivel
+      - valorHora
+      properties:
+        nivel:
+          $ref: '#/components/schemas/NivelMecanico'
+        valorHora:
+          type: number
+          format: double
+          minimum: 0.01
+
+    MecanicoResponse:
+      type: object
+      properties:
+        usuarioId:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        email:
+          type: string
+        cpf:
+          type: string
+        telefone:
+          type: string
+        nivel:
+          type: string
+        valorHora:
+          type: number
+          format: double
+        roles:
+          type: array
+          items:
+            type: string
+        ativo:
+          type: boolean
+
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - senha
+      properties:
+        email:
+          type: string
+          format: email
+        senha:
+          type: string
+          format: password
+          minLength: 6
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        usuarioId:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            type: string
+
+    ResetarSenhaRequest:
+      type: object
+      required:
+      - senhaAtual
+      - novaSenha
+      - confirmacaoNovaSenha
+      properties:
+        senhaAtual:
+          type: string
+          format: password
+        novaSenha:
+          type: string
+          format: password
+        confirmacaoNovaSenha:
+          type: string
+          format: password
+
+    CadastrarVeiculoRequest:
+      type: object
+      required:
+      - placa
+      - modelo
+      - marca
+      - ano
+      - proprietarioId
+      properties:
+        placa:
+          type: string
+        modelo:
+          type: string
+        marca:
+          type: string
+        ano:
+          type: integer
+          minimum: 1886
+        proprietarioId:
+          type: string
+          format: uuid
+        urlImagem:
+          type: string
+          nullable: true
+
+    AtualizarVeiculoRequest:
+      type: object
+      properties:
+        placa:
+          type: string
+        modelo:
+          type: string
+        marca:
+          type: string
+        ano:
+          type: integer
+          minimum: 1886
+        urlImagem:
+          type: string
+          nullable: true
+
+    DadosVeiculoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        placa:
+          type: string
+        modelo:
+          type: string
+        marca:
+          type: string
+        ano:
+          type: integer
+        proprietarioId:
+          type: string
+          format: uuid
+        urlImagem:
+          type: string
+          nullable: true
+        codigoFipe:
+          type: string
+          nullable: true
+
+    SugestoesImagensResponse:
+      type: object
+      properties:
+        imagens:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    CriarServicoRequest:
+      type: object
+      required:
+      - nomeServico
+      - descricaoServico
+      properties:
+        nomeServico:
+          type: string
+        descricaoServico:
+          type: string
+        valorReferencia:
+          type: number
+          format: double
+
+    AtualizarServicoRequest:
+      type: object
+      properties:
+        nomeServico:
+          type: string
+        descricaoServico:
+          type: string
+        valorReferencia:
+          type: number
+          format: double
+
+    ServicoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nomeServico:
+          type: string
+        descricaoServico:
+          type: string
+        valorReferencia:
+          type: number
+          format: double
+
+    CatalogoServicoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nomeServico:
+          type: string
+        descricaoServico:
+          type: string
+
+    TempoMedioConclusaoResponse:
+      type: object
+      properties:
+        servicoId:
+          type: string
+          format: uuid
+        tempoMedio:
+          type: number
+          format: double
+        unidade:
+          type: string
+          enum:
+          - SEGUNDOS
+          - MINUTOS
+          - HORAS
+          - DIAS
+        totalAmostras:
+          type: integer
+
+    CriarInsumoRequest:
+      type: object
+      required:
+      - nome
+      - descricao
+      - custo
+      properties:
+        nome:
+          type: string
+        descricao:
+          type: string
+        custo:
+          type: number
+          format: double
+        qtdEstoqueInicial:
+          type: integer
+          minimum: 0
+          default: 0
+        estoqueMinimo:
+          type: integer
+          minimum: 0
+          default: 0
+
+    AtualizarInsumoRequest:
+      type: object
+      properties:
+        nome:
+          type: string
+        descricao:
+          type: string
+        custo:
+          type: number
+          format: double
+        estoqueMinimo:
+          type: integer
+          minimum: 0
+
+    InsumoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        descricao:
+          type: string
+        custo:
+          type: number
+          format: double
+        estoqueMinimo:
+          type: integer
+        qtdEstoque:
+          type: integer
+
+    CatalogoInsumoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        descricao:
+          type: string
+
+    OrdemServicoRequest:
+      type: object
+      required:
+      - motivo
+      - clienteId
+      - mecanicoId
+      - veiculoId
+      properties:
+        motivo:
+          type: string
+        clienteId:
+          type: string
+          format: uuid
+        mecanicoId:
+          type: string
+          format: uuid
+        veiculoId:
+          type: string
+          format: uuid
+        observacao:
+          type: string
+
+    ItemServicoDiagnosticado:
+      type: object
+      required:
+      - servicoId
+      properties:
+        servicoId:
+          type: string
+          format: uuid
+        valorCobrado:
+          type: number
+          format: double
+
+    ItemInsumoDiagnosticado:
+      type: object
+      required:
+      - insumoId
+      - quantidade
+      properties:
+        insumoId:
+          type: string
+          format: uuid
+        quantidade:
+          type: integer
+          minimum: 1
+
+    CriarOrdemServicoCompletaRequest:
+      type: object
+      required:
+      - motivo
+      - clienteId
+      - veiculoId
+      - servicos
+      - insumos
+      properties:
+        motivo:
+          type: string
+        clienteId:
+          type: string
+          format: uuid
+        veiculoId:
+          type: string
+          format: uuid
+        observacao:
+          type: string
+        servicos:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemServicoDiagnosticado'
+        insumos:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemInsumoDiagnosticado'
+
+    AssociarItensRequest:
+      type: object
+      required:
+      - servicos
+      - insumos
+      properties:
+        servicos:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemServicoDiagnosticado'
+        insumos:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ItemInsumoDiagnosticado'
+
+    GerarOrcamentoRequest:
+      type: object
+      required:
+      - prazoEntrega
+      properties:
+        prazoEntrega:
+          type: string
+          format: date
+
+    ReprovarOrcamentoRequest:
+      type: object
+      required:
+      - motivo
+      properties:
+        motivo:
+          type: string
+          minLength: 1
+
+    CancelarOsRequest:
+      type: object
+      properties:
+        motivo:
+          type: string
+
+    ConcluirItemServicoRequest:
+      type: object
+      required:
+      - observacao
+      properties:
+        observacao:
+          type: string
+          minLength: 1
+
+    ResumoOrdemServicoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mecanicoId:
+          type: string
+          format: uuid
+        clienteId:
+          type: string
+          format: uuid
+        veiculoId:
+          type: string
+          format: uuid
+        motivo:
+          type: string
+        observacao:
+          type: string
+        status:
+          $ref: '#/components/schemas/StatusOrdemServico'
+
+    ItemServicoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        servicoId:
+          type: string
+          format: uuid
+        valor:
+          type: number
+          format: double
+        feito:
+          type: boolean
+        mecanicoResponsavelId:
+          type: string
+          format: uuid
+        dataRealizacao:
+          type: string
+          format: date-time
+        observacao:
+          type: string
+
+    OrcamentoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        custoMaoDeObra:
+          type: number
+          format: double
+        custoInsumos:
+          type: number
+          format: double
+        valorTotal:
+          type: number
+          format: double
+        aprovado:
+          type: boolean
+        observacao:
+          type: string
+        dataCriacao:
+          type: string
+          format: date-time
+        dataAtualizacao:
+          type: string
+          format: date-time
+
+    OrdemServicoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        motivo:
+          type: string
+        observacao:
+          type: string
+        clienteId:
+          type: string
+          format: uuid
+        mecanicoId:
+          type: string
+          format: uuid
+        veiculoId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/StatusOrdemServico'
+        dataCriacao:
+          type: string
+          format: date-time
+        dataAtualizacao:
+          type: string
+          format: date-time
+        itensServico:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemServicoResponse'
+        insumos:
+          type: array
+          items:
+            type: string
+            format: uuid
+        orcamento:
+          $ref: '#/components/schemas/OrcamentoResponse'
+
+    PageOrdemServicoResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumoOrdemServicoResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        total:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
+    ResumoDashboardResponse:
+      type: object
+      required:
+      - ordens_ativas
+      - ordens_concluidas
+      - total_ordens
+      - veiculos_cadastrados
+      properties:
+        ordens_ativas:
+          type: integer
+          minimum: 0
+        ordens_concluidas:
+          type: integer
+          minimum: 0
+        ordens_canceladas:
+          type: integer
+          minimum: 0
+        total_ordens:
+          type: integer
+          minimum: 0
+        veiculos_cadastrados:
+          type: integer
+          minimum: 0
+
+    OrdemAtivaDashboard:
+      type: object
+      required:
+      - id
+      - motivo
+      - status
+      - veiculo_id
+      - data_criacao
+      properties:
+        id:
+          type: string
+          format: uuid
+        motivo:
+          type: string
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/StatusOrdemServico'
+        veiculo_id:
+          type: string
+          format: uuid
+        veiculo_placa:
+          type: string
+          maxLength: 20
+        veiculo_modelo:
+          type: string
+          maxLength: 150
+        mecanico_id:
+          type: string
+          format: uuid
+        mecanico_nome:
+          type: string
+          maxLength: 255
+        data_criacao:
+          type: string
+          format: date-time
+        data_atualizacao:
+          type: string
+          format: date-time
+        dias_em_andamento:
+          type: integer
+          minimum: 0
+        valor_orcado:
+          type: number
+          minimum: 0
+          nullable: true
+        prazo_conclusao:
+          type: string
+          format: date-time
+          nullable: true
+
+    OrdemRecenteDashboard:
+      type: object
+      required:
+      - id
+      - motivo
+      - status
+      - veiculo_id
+      - data_criacao
+      properties:
+        id:
+          type: string
+          format: uuid
+        motivo:
+          type: string
+          maxLength: 500
+        status:
+          $ref: '#/components/schemas/StatusOrdemServico'
+        veiculo_id:
+          type: string
+          format: uuid
+        veiculo_placa:
+          type: string
+          maxLength: 20
+        veiculo_modelo:
+          type: string
+          maxLength: 150
+        data_criacao:
+          type: string
+          format: date-time
+        data_conclusao:
+          type: string
+          format: date-time
+          nullable: true
+        dias_para_conclusao:
+          type: integer
+          nullable: true
+        valor_total:
+          type: number
+          minimum: 0
+          nullable: true
+        mecanico_nome:
+          type: string
+          maxLength: 255
+          nullable: true
+
+    VeiculoDashboard:
+      type: object
+      required:
+      - id
+      - placa
+      - marca
+      - modelo
+      - ano
+      - ativo
+      properties:
+        id:
+          type: string
+          format: uuid
+        placa:
+          type: string
+          maxLength: 20
+        marca:
+          type: string
+          maxLength: 100
+        modelo:
+          type: string
+          maxLength: 150
+        ano:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+        imagem_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          nullable: true
+        codigo_fipe:
+          type: string
+          maxLength: 20
+          nullable: true
+        ativo:
+          type: boolean
+        total_ordens:
+          type: integer
+          minimum: 0
+        total_gasto:
+          type: number
+          minimum: 0
+        data_criacao:
+          type: string
+          format: date-time
+
+    DashboardClienteResponse:
+      type: object
+      required:
+      - usuario_id
+      - resumo
+      - ordens_ativas
+      - ordens_recentes
+      - veiculos
+      properties:
+        usuario_id:
+          type: string
+          format: uuid
+        usuario_nome:
+          type: string
+          maxLength: 255
+        resumo:
+          $ref: '#/components/schemas/ResumoDashboardResponse'
+        ordens_ativas:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrdemAtivaDashboard'
+        ordens_recentes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrdemRecenteDashboard'
+        veiculos:
+          type: array
+          items:
+            $ref: '#/components/schemas/VeiculoDashboard'
+        data_atualizacao:
+          type: string
+          format: date-time
+
+    NotificacaoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        titulo:
+          type: string
+        assunto:
+          type: string
+        descricao:
+          type: string
+        tipoNotificacao:
+          type: string
+          enum:
+          - EMAIL
+        tipoConteudo:
+          type: string
+          enum:
+          - MUDANCA_STATUS_OS
+        statusEnvio:
+          type: string
+          enum:
+          - PENDENTE
+          - ENVIADA
+          - FALHA_ENVIO
+        visualizada:
+          type: boolean
+        dataCriacao:
+          type: string
+          format: date-time
+        dataEnvio:
+          type: string
+          format: date-time
+          nullable: true
+        dataVisualizacao:
+          type: string
+          format: date-time
+          nullable: true
+
+    PageNotificacaoResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificacaoResponse'
+        page:
+          type: integer
+        size:
+          type: integer
+        total:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
+    ContadorNaoLidasResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
