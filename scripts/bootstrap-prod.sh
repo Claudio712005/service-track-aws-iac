@@ -6,7 +6,6 @@ TF_DIR="$ROOT_DIR/infra/terraform"
 K8S_DIR="$ROOT_DIR/infra/k8s"
 NS="service-track"
 
-# Perfil AWS opcional (local usa aws-student; na pipeline vem vazio).
 : "${AWS_PROFILE=aws-student}"
 aws_profile_arg=()
 if [ -z "$AWS_PROFILE" ]; then unset AWS_PROFILE; else export AWS_PROFILE; aws_profile_arg=(--profile "$AWS_PROFILE"); fi
@@ -122,7 +121,6 @@ echo ">> ArgoCD login:   admin / ${ARGO_PASS:-<rode: kubectl -n argocd get secre
 echo ">> O ArgoCD sincroniza o app automaticamente a partir de infra/k8s/overlays/prod (branch main)."
 echo ">> Acompanhe: kubectl -n argocd get applications  |  kubectl -n $NS get pods,svc,hpa"
 
-# Resumo bonito no GitHub Actions (quando rodando na pipeline).
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
     echo "## ServiceTrack — Bootstrap prod"
