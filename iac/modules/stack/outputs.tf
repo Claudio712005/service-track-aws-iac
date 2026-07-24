@@ -54,10 +54,34 @@ output "api_gateway_id" {
   value       = module.api_gateway.api_id
 }
 
-output "api_key_value" {
-  description = "API key do ambiente. Enviar no header x-api-key."
-  value       = module.api_gateway.api_key_value
+output "api_consumers" {
+  description = "Consumidores habilitados, cada um com sua API key."
+  value       = module.api_gateway.consumers
+}
+
+output "api_key_values" {
+  description = "API key por consumidor. Enviar no header x-api-key."
+  value       = module.api_gateway.api_key_values
   sensitive   = true
+}
+
+output "api_key_ids" {
+  value = module.api_gateway.api_key_ids
+}
+
+output "api_custom_domain_url" {
+  description = "URL no dominio customizado, se habilitado."
+  value       = module.api_gateway.custom_domain_url
+}
+
+output "api_custom_domain_target" {
+  description = "Alvo regional do dominio customizado, para DNS externo."
+  value       = module.api_gateway.custom_domain_target
+}
+
+output "jwt_authorizer_function_name" {
+  description = "Funcao do authorizer de JWT, se habilitado."
+  value       = var.enable_jwt_authorizer ? module.jwt_authorizer[0].function_name : null
 }
 
 output "app_backend_nlb_dns" {

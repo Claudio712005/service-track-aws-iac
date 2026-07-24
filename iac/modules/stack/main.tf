@@ -12,6 +12,13 @@ locals {
   # A partir de iac/modules/stack, tres niveis acima e a raiz do repositorio.
   api_ext_dir = "${path.module}/../../../apis/service-track-api-ext"
   env_suffix  = upper(var.environment)
+
+  # A chave publica ja e entregue a Lambda de autenticacao por lambda_extra_env;
+  # o authorizer reusa a mesma, sem novo segredo.
+  jwt_public_key = coalesce(
+    var.jwt_public_key,
+    lookup(var.lambda_extra_env, "MP_JWT_VERIFY_PUBLICKEY", ""),
+  )
 }
 
 data "aws_iam_role" "lab" {
@@ -134,6 +141,20 @@ module "vpc_link" {
   health_check_path      = var.app_health_check_path
 }
 
+# Authorizer de JWT na borda. Opcional: por padrao a validacao fica so no
+# backend. Ver ADR-007.
+module "jwt_authorizer" {
+  source = "../lambda-authorizer"
+  count  = var.enable_jwt_authorizer ? 1 : 0
+
+  name               = "${local.name}-jwt-authorizer"
+  tags               = local.tags
+  lab_role_arn       = data.aws_iam_role.lab.arn
+  jwt_public_key     = local.jwt_public_key
+  jwt_issuer         = var.jwt_issuer
+  jwt_leeway_seconds = var.jwt_leeway_seconds
+}
+
 # API Gateway REST definido pelo contrato EXT. Roteia /autenticacao* para a
 # Lambda e o restante para a aplicacao no EKS via VPC Link.
 module "api_gateway" {
@@ -152,6 +173,12 @@ module "api_gateway" {
 
   app_backend_host = module.vpc_link.nlb_dns_name
   vpc_link_id      = module.vpc_link.vpc_link_id
+
+  authorizer_invoke_arn         = var.enable_jwt_authorizer ? module.jwt_authorizer[0].invoke_arn : null
+  authorizer_function_name      = var.enable_jwt_authorizer ? module.jwt_authorizer[0].function_name : null
+  authorizer_result_ttl_seconds = var.authorizer_result_ttl_seconds
+
+  custom_domain = var.custom_domain
 
   enable_access_logs  = var.enable_api_access_logs
   cloudwatch_role_arn = data.aws_iam_role.lab.arn

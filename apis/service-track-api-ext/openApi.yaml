@@ -19,6 +19,14 @@ servers:
       enum:
       - hml
       - prd
+- url: https://{domain}/{basePath}
+  description: Endpoint por dominio customizado, quando habilitado (var.custom_domain).
+    Estavel entre recriacoes do ambiente, ao contrario do endpoint de execute-api.
+  variables:
+    domain:
+      default: api.servicetrack.com.br
+    basePath:
+      default: service-track/v1
 
 security:
 - ApiKeyAuth: []
@@ -1421,10 +1429,7 @@ components:
       name: x-api-key
       in: header
 
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    bearerAuth: ${bearer_auth_scheme}
 
   parameters:
     Id:

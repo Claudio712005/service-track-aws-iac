@@ -120,8 +120,6 @@ variable "lambda_extra_env" {
   default     = {}
 }
 
-# --- exposicao da API ---------------------------------------------------------
-
 variable "app_node_port" {
   description = <<-EOT
     NodePort em que o Service da aplicacao e exposto no EKS. E o contrato entre
@@ -148,4 +146,46 @@ variable "enable_api_access_logs" {
   description = "Habilita access/execution logs do API Gateway no CloudWatch. Ver ADR-006."
   type        = bool
   default     = true
+}
+
+variable "enable_jwt_authorizer" {
+  description = <<-EOT
+    Habilita o Lambda authorizer que valida o JWT na borda. Exige a chave publica
+    RS256 (jwt_public_key ou lambda_extra_env.MP_JWT_VERIFY_PUBLICKEY).
+    Desligado por padrao: a validacao no backend continua sendo a fonte de
+    verdade. Ver ADR-007.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "jwt_public_key" {
+  description = "Chave publica RS256 em PEM para o authorizer. Se null, usa lambda_extra_env.MP_JWT_VERIFY_PUBLICKEY."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "jwt_leeway_seconds" {
+  description = "Tolerancia de relogio na validacao de exp/nbf pelo authorizer."
+  type        = number
+  default     = 60
+}
+
+variable "authorizer_result_ttl_seconds" {
+  description = "Cache do resultado do authorizer por token."
+  type        = number
+  default     = 300
+}
+
+variable "custom_domain" {
+  description = "Dominio customizado da API. Ver iac/modules/api-gateway/variables.tf."
+  type = object({
+    domain_name      = string
+    base_path        = optional(string, "service-track/v1")
+    hosted_zone_id   = optional(string)
+    hosted_zone_name = optional(string)
+    certificate_arn  = optional(string)
+  })
+  default = null
 }

@@ -47,14 +47,78 @@ locals {
     }
   })
 
+  # Com authorizer desligado o esquema e um http/bearer que o API Gateway ignora
+  # (contrato apenas). Ligado, vira o authorizer custom aplicado a toda operacao
+  # que referencia bearerAuth -- rotas com `security: []` seguem abertas.
+  bearer_auth_scheme = var.authorizer_invoke_arn == null ? jsonencode({
+    type         = "http"
+    scheme       = "bearer"
+    bearerFormat = "JWT"
+    }) : jsonencode({
+    type                           = "apiKey"
+    name                           = "Authorization"
+    in                             = "header"
+    "x-amazon-apigateway-authtype" = "custom"
+    "x-amazon-apigateway-authorizer" = {
+      type                         = "token"
+      authorizerUri                = var.authorizer_invoke_arn
+      authorizerResultTtlInSeconds = var.authorizer_result_ttl_seconds
+      identityValidationExpression = "^[Bb]earer [-_.A-Za-z0-9]+$"
+    }
+  })
+
   body = templatefile(var.openapi_path, {
-    auth_lambda_uri  = var.auth_lambda_invoke_arn
-    app_backend_host = var.app_backend_host
-    vpc_link_id      = var.vpc_link_id
-    cors_options     = local.cors_options
+    auth_lambda_uri    = var.auth_lambda_invoke_arn
+    app_backend_host   = var.app_backend_host
+    vpc_link_id        = var.vpc_link_id
+    cors_options       = local.cors_options
+    bearer_auth_scheme = local.bearer_auth_scheme
   })
 
   stage_cfg = local.plan["stage"]
+
+  consumers = {
+    for name, cfg in try(local.plan["consumers"], {}) : name => cfg
+    if try(cfg["enabled"], true)
+  }
+
+  # Consumidor que declara throttle ou quota proprios ganha usage plan dedicado;
+  # os demais compartilham o plano do ambiente.
+  dedicated_consumers = {
+    for name, cfg in local.consumers : name => cfg
+    if lookup(cfg, "throttle", null) != null || lookup(cfg, "quota", null) != null
+  }
+
+  shared_consumers = {
+    for name, cfg in local.consumers : name => cfg
+    if !contains(keys(local.dedicated_consumers), name)
+  }
+
+  domain             = var.custom_domain
+  create_domain      = var.custom_domain != null
+  create_certificate = var.custom_domain != null && try(var.custom_domain.certificate_arn, null) == null
+
+  # A zona pode vir por ID ou por nome. Por nome evita carregar o ID em tfvars
+  # (que e gitignored) ou em secret de pipeline.
+  lookup_zone = (
+    var.custom_domain != null &&
+    try(var.custom_domain.hosted_zone_name, null) != null &&
+    try(var.custom_domain.hosted_zone_id, null) == null
+  )
+
+  create_dns = var.custom_domain != null && (
+    try(var.custom_domain.hosted_zone_id, null) != null ||
+    try(var.custom_domain.hosted_zone_name, null) != null
+  )
+
+  zone_id = local.lookup_zone ? try(data.aws_route53_zone.this[0].zone_id, null) : try(var.custom_domain.hosted_zone_id, null)
+}
+
+data "aws_route53_zone" "this" {
+  count = local.lookup_zone ? 1 : 0
+
+  name         = var.custom_domain.hosted_zone_name
+  private_zone = false
 }
 
 resource "aws_api_gateway_rest_api" "this" {
@@ -118,6 +182,8 @@ resource "aws_api_gateway_stage" "this" {
         responseLength = "$context.responseLength"
         integrationErr = "$context.integration.error"
         apiKeyId       = "$context.identity.apiKeyId"
+        authorizerErr  = "$context.authorizer.error"
+        principalId    = "$context.authorizer.principalId"
       })
     }
   }
@@ -143,16 +209,18 @@ resource "aws_api_gateway_method_settings" "all" {
   }
 }
 
-resource "aws_api_gateway_api_key" "this" {
-  name        = "${var.name}-key"
-  description = "API key do ambiente ${var.environment}"
+resource "aws_api_gateway_api_key" "consumer" {
+  for_each = local.consumers
+
+  name        = "${var.name}-${each.key}"
+  description = try(each.value["description"], "Consumidor ${each.key} (${var.environment})")
   enabled     = true
-  tags        = var.tags
+  tags        = merge(var.tags, { Consumer = each.key })
 }
 
-resource "aws_api_gateway_usage_plan" "this" {
+resource "aws_api_gateway_usage_plan" "default" {
   name        = "${var.name}-usage-plan"
-  description = "Throttling e quota do ambiente ${var.environment}"
+  description = "Throttling e quota padrao do ambiente ${var.environment}"
 
   api_stages {
     api_id = aws_api_gateway_rest_api.this.id
@@ -172,10 +240,44 @@ resource "aws_api_gateway_usage_plan" "this" {
   tags = var.tags
 }
 
-resource "aws_api_gateway_usage_plan_key" "this" {
-  key_id        = aws_api_gateway_api_key.this.id
+resource "aws_api_gateway_usage_plan" "dedicated" {
+  for_each = local.dedicated_consumers
+
+  name        = "${var.name}-${each.key}-usage-plan"
+  description = "Limites dedicados do consumidor ${each.key} (${var.environment})"
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.this.id
+    stage  = aws_api_gateway_stage.this.stage_name
+  }
+
+  throttle_settings {
+    rate_limit  = try(each.value["throttle"]["rateLimit"], local.plan["usagePlan"]["throttle"]["rateLimit"])
+    burst_limit = try(each.value["throttle"]["burstLimit"], local.plan["usagePlan"]["throttle"]["burstLimit"])
+  }
+
+  quota_settings {
+    limit  = try(each.value["quota"]["limit"], local.plan["usagePlan"]["quota"]["limit"])
+    period = try(each.value["quota"]["period"], local.plan["usagePlan"]["quota"]["period"])
+  }
+
+  tags = merge(var.tags, { Consumer = each.key })
+}
+
+resource "aws_api_gateway_usage_plan_key" "shared" {
+  for_each = local.shared_consumers
+
+  key_id        = aws_api_gateway_api_key.consumer[each.key].id
   key_type      = "API_KEY"
-  usage_plan_id = aws_api_gateway_usage_plan.this.id
+  usage_plan_id = aws_api_gateway_usage_plan.default.id
+}
+
+resource "aws_api_gateway_usage_plan_key" "dedicated" {
+  for_each = local.dedicated_consumers
+
+  key_id        = aws_api_gateway_api_key.consumer[each.key].id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.dedicated[each.key].id
 }
 
 resource "aws_api_gateway_gateway_response" "cors_4xx" {
@@ -206,4 +308,91 @@ resource "aws_lambda_permission" "auth" {
   function_name = var.auth_lambda_function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/*/*"
+}
+
+# O authorizer e criado pela importacao do OpenAPI, entao nao ha recurso
+# Terraform para referenciar: a permissao usa o wildcard de authorizers da API.
+resource "aws_lambda_permission" "authorizer" {
+  count = var.authorizer_invoke_arn == null ? 0 : 1
+
+  statement_id  = "AllowInvokeAuthorizerFromApiGateway-${var.environment}"
+  action        = "lambda:InvokeFunction"
+  function_name = var.authorizer_function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/authorizers/*"
+}
+
+resource "aws_acm_certificate" "this" {
+  count = local.create_certificate ? 1 : 0
+
+  domain_name       = local.domain.domain_name
+  validation_method = "DNS"
+
+  tags = var.tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "cert_validation" {
+  for_each = local.create_certificate && local.create_dns ? {
+    for opt in aws_acm_certificate.this[0].domain_validation_options :
+    opt.domain_name => opt
+  } : {}
+
+  zone_id         = local.zone_id
+  name            = each.value.resource_record_name
+  type            = each.value.resource_record_type
+  records         = [each.value.resource_record_value]
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "this" {
+  count = local.create_certificate ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.this[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+resource "aws_api_gateway_domain_name" "this" {
+  count = local.create_domain ? 1 : 0
+
+  domain_name = local.domain.domain_name
+  regional_certificate_arn = (
+    local.create_certificate
+    ? aws_acm_certificate_validation.this[0].certificate_arn
+    : local.domain.certificate_arn
+  )
+  security_policy = "TLS_1_2"
+
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+
+  tags = var.tags
+}
+
+resource "aws_api_gateway_base_path_mapping" "this" {
+  count = local.create_domain ? 1 : 0
+
+  api_id      = aws_api_gateway_rest_api.this.id
+  stage_name  = aws_api_gateway_stage.this.stage_name
+  domain_name = aws_api_gateway_domain_name.this[0].domain_name
+  base_path   = local.domain.base_path
+}
+
+resource "aws_route53_record" "api" {
+  count = local.create_dns ? 1 : 0
+
+  zone_id = local.zone_id
+  name    = local.domain.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_api_gateway_domain_name.this[0].regional_domain_name
+    zone_id                = aws_api_gateway_domain_name.this[0].regional_zone_id
+    evaluate_target_health = false
+  }
 }
