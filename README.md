@@ -2,8 +2,8 @@
 
 Infraestrutura como código (Terraform) do ambiente AWS da aplicação ServiceTrack.
 Provisiona rede, cluster Kubernetes gerenciado (EKS), banco PostgreSQL (RDS),
-repositórios de imagem (ECR), GitOps (ArgoCD) e o serviço de autenticação em
-AWS Lambda (Quarkus/Kotlin) exposto por API Gateway.
+repositórios de imagem (ECR), GitOps (ArgoCD), o serviço de autenticação em
+AWS Lambda (Quarkus/Kotlin) e a exposição externa da API por API Gateway.
 
 O código é organizado em módulos reutilizáveis e dois ambientes isolados,
 homologação (`hml`) e produção (`prd`), cada um com seu próprio state e sizing.
@@ -11,6 +11,13 @@ homologação (`hml`) e produção (`prd`), cada um com seu próprio state e siz
 ## Estrutura
 
 ```
+apis/
+  service-track-api-ext/           Contrato de exposicao externa (EXT) da API
+    openApi.yaml                   Definicao do API Gateway (importada pelo Terraform)
+    api-configuration/
+      cors/config-{HML,PRD}.yaml       CORS por ambiente
+      usage-plan/config-{HML,PRD}.yaml Throttling, quota e logs por ambiente
+
 iac/
   modules/
     network/       VPC, subnets publicas/privadas, IGW, NAT, rotas
@@ -19,11 +26,17 @@ iac/
     rds/           PostgreSQL + security group
     ecr/           Repositorio de imagem (reutilizavel)
     lambda/        Lambda de autenticacao (imagem de container) + SG + logs
-    api-gateway/   HTTP API v2 -> Lambda
+    vpc-link/      NLB interno + VPC Link (API Gateway -> EKS)
+    api-gateway/   REST API a partir do openApi.yaml + usage plan + API key
     stack/         Composicao que liga todos os modulos acima
   environments/
     hml/           Homologacao (t3.small / db.t3.micro) - state key servicetrack/hml
     prd/           Producao   (t3.large / db.t3.medium) - state key servicetrack/prd
+
+docs/
+  adr/             Decisoes arquiteturais (ADR-001 a ADR-006)
+  rfc/             RFC-001: arquitetura de exposicao da API
+  api-gateway/     Guia tecnico e operacional do gateway
 ```
 
 Cada ambiente é um root module fino: configura os providers, define o backend S3
@@ -48,9 +61,43 @@ ambiente.
   container (Quarkus + Kotlin, `package_type = "Image"`). Roda dentro da VPC, nas
   subnets privadas, para alcançar o RDS. As credenciais do banco e a configuração
   JWT são injetadas por variáveis de ambiente.
-- **API Gateway** (`modules/api-gateway`) — HTTP API v2 com integração proxy
-  (`AWS_PROXY`) encaminhando todas as rotas para a Lambda, que resolve o roteamento
-  interno via `quarkus-amazon-lambda-rest`.
+- **VPC Link** (`modules/vpc-link`) — NLB interno nas subnets privadas, com o Auto
+  Scaling Group do node group registrado no target group, mais o VPC Link que
+  liga o API Gateway a esse NLB. É o caminho privado do gateway até a aplicação
+  no EKS.
+- **API Gateway** (`modules/api-gateway`) — REST API construída a partir de
+  `apis/service-track-api-ext/openApi.yaml`. Roteia `/autenticacao*` para a Lambda
+  (`AWS_PROXY`) e as demais rotas para a aplicação no EKS (`HTTP_PROXY` via VPC
+  Link). Provisiona também stage, deployment, Usage Plan, API Key, CORS e logs.
+
+## Exposição da API (EXT)
+
+O contrato em `apis/service-track-api-ext/openApi.yaml` **é** a definição do
+gateway: o Terraform o importa em `aws_api_gateway_rest_api.body`, injetando em
+tempo de apply o ARN da Lambda, o DNS do NLB e o ID do VPC Link.
+
+```
+Internet -> API Gateway REST (stage hml|prd)
+              |-- /autenticacao*  -> Lambda de autenticacao
+              |-- demais rotas    -> VPC Link -> NLB interno -> NodePort 30080 -> EKS
+```
+
+Na borda o gateway aplica API Key (`x-api-key`), throttling, quota, validação de
+request por JSON Schema e CORS. A validação do JWT permanece no backend.
+
+Antes de qualquer `apply` que altere o contrato:
+
+```bash
+scripts/validate-openapi.sh
+```
+
+> O `Service` da aplicação no EKS precisa ser `type: NodePort` com
+> `nodePort: 30080` (`var.app_node_port`). É o único acoplamento com o
+> repositório de manifestos.
+
+Guia completo em [`docs/api-gateway/README.md`](docs/api-gateway/README.md).
+Decisões arquiteturais em [`docs/adr/`](docs/adr/) e
+[`docs/rfc/RFC-001`](docs/rfc/RFC-001-arquitetura-de-exposicao-da-api.md).
 
 ## Pré-requisitos
 
@@ -142,9 +189,20 @@ aws eks update-kubeconfig --name servicetrack-prd --region us-east-1
 | `lambda_ecr_repository_url` | URL do repositório ECR da Lambda |
 | `rds_endpoint`, `rds_jdbc_url` | Endereço e URL JDBC do PostgreSQL |
 | `db_password` | Senha do banco (sensível) |
-| `api_gateway_url` | URL pública do serviço de autenticação |
+| `api_gateway_url` | URL base pública da API, já com o stage |
+| `api_gateway_id` | ID do REST API |
+| `api_key_value` | API key do ambiente, para o header `x-api-key` (sensível) |
+| `app_backend_nlb_dns` | DNS do NLB interno que expõe a aplicação do EKS |
 | `argocd_url` | URL do ArgoCD (se exposto) |
 | `argocd_admin_password_cmd` | Comando para obter a senha inicial do admin |
+
+A URL e a API key **mudam a cada recriação do ambiente** — leia-as dos outputs,
+não as fixe em código de cliente:
+
+```bash
+terraform output api_gateway_url
+terraform output -raw api_key_value
+```
 
 ## Configuração da Lambda de autenticação
 
