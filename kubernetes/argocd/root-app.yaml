@@ -1,0 +1,30 @@
+# App-of-apps: aplicado uma vez pelo Terraform (modules/addons) apos o ArgoCD
+# subir. A partir dai o Argo sincroniza sozinho as Applications em
+# kubernetes/argocd/applications/ -- hoje so a service-track-prod.
+#
+# O app local (kind) fica em kubernetes/argocd/local/ e NAO e sincronizado aqui:
+# recurse=false pega apenas os arquivos diretamente em applications/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: service-track-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: service-track
+  source:
+    repoURL: https://github.com/Claudio712005/service-track-aws-iac.git
+    targetRevision: main
+    path: kubernetes/argocd/applications
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true

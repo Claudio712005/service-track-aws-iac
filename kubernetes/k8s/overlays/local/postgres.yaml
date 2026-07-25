@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-track-postgres
+  labels:
+    app: service-track-postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-track-postgres
+  template:
+    metadata:
+      labels:
+        app: service-track-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: service-track-db
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "servicetrack", "-d", "servicetrack"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: init
+          configMap:
+            name: service-track-db-init
+            defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-track-postgres
+  labels:
+    app: service-track-postgres
+spec:
+  selector:
+    app: service-track-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

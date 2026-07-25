@@ -1,0 +1,61 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: service-track
+
+resources:
+  - ../../base
+  - postgres.yaml
+  - service-nodeport.yaml
+
+images:
+  - name: servicetrack-api
+    newTag: local
+
+patches:
+  - target:
+      kind: Deployment
+      name: service-track-app
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: service-track-config
+    literals:
+      - QUARKUS_PROFILE=prod
+      - DB_JDBC_URL=jdbc:postgresql://service-track-postgres:5432/servicetrack
+      - SERVICETRACK_API_BASE_URL=http://localhost:8080
+      - QUARKUS_MAILER_FROM=no-reply@clausilva.com.br
+      - MP_JWT_VERIFY_PUBLICKEY_LOCATION=file:/keys/publicKey.pem
+      - SMALLRYE_JWT_SIGN_KEY_LOCATION=file:/keys/privateKey.pem
+  - name: service-track-db-init
+    files:
+      - scripts/01-init-roles.sh
+
+secretGenerator:
+  - name: service-track-secret
+    literals:
+      - APP_DB_USER=app_user
+      - APP_DB_PASSWORD=app_change_me
+      - FLYWAY_DB_USER=flyway_user
+      - FLYWAY_DB_PASSWORD=flyway_change_me
+      - UNSPLASH_CHAVE_ACESSO=local-placeholder
+      - RESEND_API_KEY=local-placeholder
+  - name: service-track-db
+    literals:
+      - POSTGRES_DB=servicetrack
+      - POSTGRES_USER=servicetrack
+      - POSTGRES_PASSWORD=servicetrack
+      - FLYWAY_DB_USER=flyway_user
+      - FLYWAY_DB_PASSWORD=flyway_change_me
+      - APP_DB_USER=app_user
+      - APP_DB_PASSWORD=app_change_me
+  - name: service-track-jwt
+    files:
+      - keys/privateKey.pem
+      - keys/publicKey.pem

@@ -1,0 +1,69 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: service-track
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Ordens de serviço - API ServiceTrack
+  sourceRepos:
+    - https://github.com/Claudio712005/service-track-aws-iac.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: service-track
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  # Inclui os recursos-filho (Pod, ReplicaSet, Endpoints) alem dos que os
+  # overlays declaram. Sem os filhos no projeto, a arvore de recursos do app
+  # nao renderiza os pods no console -- alem de o deploy passar a ser feito
+  # pelo proprio Argo (GitOps), nao mais por kubectl imperativo.
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: Pod
+    - group: ""
+      kind: Endpoints
+    - group: ""
+      kind: PersistentVolumeClaim
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: ReplicaSet
+    - group: apps
+      kind: StatefulSet
+    - group: batch
+      kind: Job
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: discovery.k8s.io
+      kind: EndpointSlice
+    - group: argoproj.io
+      kind: Application
+  orphanedResources:
+    warn: true
+    ignore:
+      - kind: Secret
+        name: service-track-secret
+      - kind: Secret
+        name: service-track-jwt
+      - kind: Secret
+        name: db-init-creds
+      - kind: ConfigMap
+        name: service-track-runtime
+      - kind: ConfigMap
+        name: db-init-script
+      - kind: ConfigMap
+        name: kube-root-ca.crt
+      - kind: Job
+        name: service-track-db-init

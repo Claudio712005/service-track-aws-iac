@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-track-app
+  labels:
+    app: service-track-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: service-track-app
+  template:
+    metadata:
+      labels:
+        app: service-track-app
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: service-track-app
+      containers:
+        - name: service-track-app
+          image: servicetrack-api:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: service-track-config
+            - configMapRef:
+                name: service-track-runtime
+            - secretRef:
+                name: service-track-secret
+          volumeMounts:
+            - name: jwt-keys
+              mountPath: /keys
+              readOnly: true
+          startupProbe:
+            httpGet:
+              path: /q/health/started
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /q/health/ready
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /q/health/live
+              port: 8080
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: jwt-keys
+          secret:
+            secretName: service-track-jwt

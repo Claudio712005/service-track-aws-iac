@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: service-track
+
+resources:
+- ../../base
+- hpa.yaml
+- service-nodeport.yaml
+
+images:
+- name: servicetrack-api
+  newName: 123124496645.dkr.ecr.us-east-1.amazonaws.com/service-track-app
+  newTag: 564b927b6433d95528711b945c89afa53aaef3e0
+
+configMapGenerator:
+- literals:
+  - QUARKUS_PROFILE=prod
+  - QUARKUS_MAILER_FROM=no-reply@clausilva.com.br
+  - MP_JWT_VERIFY_PUBLICKEY_LOCATION=file:/keys/publicKey.pem
+  - SMALLRYE_JWT_SIGN_KEY_LOCATION=file:/keys/privateKey.pem
+  name: service-track-config
+
+generatorOptions:
+  disableNameSuffixHash: true

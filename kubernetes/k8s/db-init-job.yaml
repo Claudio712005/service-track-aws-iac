@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: service-track-db-init
+  namespace: service-track
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: service-track-db-init
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-init
+          image: postgres:16-alpine
+          command: ["bash", "/scripts/01-init-roles.sh"]
+          envFrom:
+            - secretRef:
+                name: db-init-creds
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: db-init-script
