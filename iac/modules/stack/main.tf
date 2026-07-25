@@ -62,6 +62,32 @@ module "addons" {
   node_group_dependency        = module.eks.node_group
 }
 
+# Bootstrap do GitOps: aplica o AppProject e o app-of-apps depois que o ArgoCD
+# sobe. E o unico passo imperativo -- a partir dai o Argo sincroniza a aplicacao
+# a partir do git, e os pods passam a aparecer no console como recursos do app
+# (antes o deploy era feito por kubectl solto, fora do rastreio do Argo).
+locals {
+  argocd_bootstrap_files = [
+    "${path.module}/../../../kubernetes/argocd/projects/service-track.appproject.yaml",
+    "${path.module}/../../../kubernetes/argocd/root-app.yaml",
+  ]
+}
+
+resource "null_resource" "argocd_bootstrap" {
+  count = var.bootstrap_argocd_apps ? 1 : 0
+
+  triggers = {
+    manifests = join(",", [for f in local.argocd_bootstrap_files : filesha1(f)])
+    cluster   = module.eks.cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/../../../scripts/argocd-bootstrap-apply.sh ${module.eks.cluster_name} ${data.aws_region.current.name}"
+  }
+
+  depends_on = [module.addons]
+}
+
 # Repositorio ECR da imagem da aplicacao (deploy no EKS).
 module "ecr_app" {
   source = "../ecr"

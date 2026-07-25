@@ -189,3 +189,9 @@ variable "custom_domain" {
   })
   default = null
 }
+
+variable "bootstrap_argocd_apps" {
+  description = "Aplica o AppProject e o app-of-apps do ArgoCD no apply (GitOps). Exige kubectl e aws CLI na maquina que aplica."
+  type        = bool
+  default     = true
+}

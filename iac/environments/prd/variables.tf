@@ -55,3 +55,9 @@ variable "api_base_path" {
   type    = string
   default = "service-track/v1"
 }
+
+variable "bootstrap_argocd_apps" {
+  description = "Aplica o AppProject e o app-of-apps do ArgoCD no apply. Ver modules/stack."
+  type        = bool
+  default     = true
+}

@@ -229,6 +229,12 @@ jobs:
           go-version: "1.23"
           cache-dependency-path: iac/modules/lambda-authorizer/src/go.sum
 
+      # O bootstrap do ArgoCD (null_resource no stack) aplica o app-of-apps com
+      # kubectl no apply. Roda so quando os manifests mudam ou no primeiro apply.
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.30.0"
+
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
 

@@ -34,4 +34,5 @@ module "stack" {
     hosted_zone_name = var.api_hosted_zone_name
     base_path        = var.api_base_path
   } : null
+  bootstrap_argocd_apps = var.bootstrap_argocd_apps
 }

@@ -31,3 +31,9 @@ variable "jwt_public_key" {
 # HML nao expoe dominio customizado por decisao: o dominio clausilva.com.br fica
 # reservado para PRD e o orcamento de HML foi realocado para observabilidade.
 # Sem a variavel, ligar o dominio em HML exige mudanca de codigo revisavel.
+
+variable "bootstrap_argocd_apps" {
+  description = "Aplica o AppProject e o app-of-apps do ArgoCD no apply. Ver modules/stack."
+  type        = bool
+  default     = true
+}
