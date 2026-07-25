@@ -121,15 +121,160 @@ publicada após cada apply.
 Guia completo em [`docs/api-gateway/README.md`](docs/api-gateway/README.md).
 Índice das decisões em [`docs/README.md`](docs/README.md).
 
+## Secrets e credenciais
+
+Nenhum material sensível é versionado ([ADR-013](docs/adr/ADR-013-chaves-jwt-fora-do-git.md)).
+Esta é a lista completa do que precisa existir e como criar.
+
+| Segredo | Onde vive | Quando criar | Origem |
+|---|---|---|---|
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | GitHub → **este repo** → Environments `hml` e `prd` | a cada laboratório | AWS Academy → AWS Details → AWS CLI |
+| `IAC_REPO_TOKEN` | GitHub → **repo da API** → Secrets | uma vez | PAT fino / GitHub App, `contents: write` só neste repo |
+| `lambda_extra_env` (`MP_JWT_VERIFY_PUBLICKEY`, `SMALLRYE_JWT_SIGN_KEY`) | variável Terraform (tfvars / `TF_VAR`) | por ambiente | `openssl` (par RS256) |
+| `app_secret_params` (`service-track-secret`, `db-init-creds`, `jwt-private`, `jwt-public`) | variável Terraform → SSM → secret do k8s | por ambiente | `openssl` + compor dotenv |
+
+O material sensível entra como **variável Terraform** e é reaplicado a cada
+recriação — guarde num `terraform.tfvars` local (gitignored) ou em `TF_VAR_*`.
+A esteira Terraform transporta apenas as credenciais AWS, a tag da imagem e o
+domínio; os segredos são fornecidos no `apply` (local, ou adicionando os
+`TF_VAR_*` ao job).
+
+### 1. Credenciais AWS (esteiras)
+
+As três secrets por environment, renovadas a cada lab. Passo a passo em
+[Antes de qualquer esteira](#antes-de-qualquer-esteira-renovar-as-credenciais-da-aws).
+
+### 2. Token cross-repo (`IAC_REPO_TOKEN`)
+
+Usado pelo repo da API para disparar o bump de imagem neste repo (ver
+[Repositório da API](#repositório-da-api-cd-da-imagem)).
+
+- GitHub → **Settings → Developer settings → Fine-grained tokens**.
+- **Repository access:** apenas `service-track-aws-iac`.
+- **Permissions → Repository → Contents: Read and write**. Nada além disso.
+- Guarde no **repo da API** como secret `IAC_REPO_TOKEN`.
+
+Se vazar, o dano máximo é um commit de bump (revertível) — não dá acesso à AWS.
+
+### 3. Chaves JWT (RS256)
+
+Um par assina/verifica o JWT. Gere com:
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out privateKey.pem
+openssl rsa -in privateKey.pem -pubout -out publicKey.pem
+```
+
+O mesmo par abastece dois consumidores:
+
+- **Lambda de autenticação** — via `lambda_extra_env` (ver
+  [Configuração da Lambda](#configuração-da-lambda-de-autenticação)):
+  `MP_JWT_VERIFY_PUBLICKEY` = conteúdo de `publicKey.pem`,
+  `SMALLRYE_JWT_SIGN_KEY` = conteúdo de `privateKey.pem`.
+- **Aplicação no EKS** — via `app_secret_params` (`jwt-private` / `jwt-public`).
+
+### 4. Segredos da aplicação (`app_secret_params`)
+
+Um `map(string)` com quatro chaves conhecidas. O Terraform grava cada uma como
+`SecureString` no SSM (`/servicetrack/<env>/<chave>`) e o
+`scripts/app-secrets-bootstrap.sh` as materializa como secrets do Kubernetes no
+cluster durante o `apply`.
+
+| Chave | Vira o secret k8s | Formato | Conteúdo |
+|---|---|---|---|
+| `service-track-secret` | `service-track-secret` | dotenv | `APP_DB_USER`, `APP_DB_PASSWORD`, `FLYWAY_DB_USER`, `FLYWAY_DB_PASSWORD`, `UNSPLASH_CHAVE_ACESSO`, `RESEND_API_KEY` |
+| `db-init-creds` | `db-init-creds` | dotenv | credenciais lidas por `kubernetes/k8s/overlays/local/scripts/01-init-roles.sh` (superusuário do RDS + roles `APP_DB_*` e `FLYWAY_DB_*`) |
+| `jwt-private` | `service-track-jwt` (`privateKey.pem`) | PEM | `privateKey.pem` |
+| `jwt-public` | `service-track-jwt` (`publicKey.pem`) | PEM | `publicKey.pem` |
+
+Exemplo no `terraform.tfvars` (gitignored):
+
+```hcl
+app_secret_params = {
+  "service-track-secret" = <<-EOT
+    APP_DB_USER=app_user
+    APP_DB_PASSWORD=troque_isto
+    FLYWAY_DB_USER=flyway_user
+    FLYWAY_DB_PASSWORD=troque_isto
+    UNSPLASH_CHAVE_ACESSO=...
+    RESEND_API_KEY=...
+  EOT
+  "db-init-creds" = <<-EOT
+    POSTGRES_USER=servicetrack
+    POSTGRES_PASSWORD=<master do RDS>
+    POSTGRES_DB=servicetrack
+    APP_DB_USER=app_user
+    APP_DB_PASSWORD=troque_isto
+    FLYWAY_DB_USER=flyway_user
+    FLYWAY_DB_PASSWORD=troque_isto
+  EOT
+  "jwt-private" = file("privateKey.pem")
+  "jwt-public"  = file("publicKey.pem")
+}
+```
+
+Vazio (padrão), o passo é ignorado e nenhum secret é criado — a aplicação sobe
+mas os pods ficam sem os segredos até você fornecê-los.
+
+> Requer que a `LabRole` permita `ssm:PutParameter` e `ssm:GetParameter`. Se não
+> permitir, entregue os secrets do k8s manualmente.
+
+### Dev local (kind)
+
+`scripts/gen-local-jwt-keys.sh` gera as chaves; o overlay `local` cria os demais
+secrets com valores placeholder. Ver
+[kubernetes/README.md](kubernetes/README.md).
+
+## Repositório da API (CD da imagem)
+
+O **código da aplicação** vive em outro repositório
+([service-track-api](https://github.com/Claudio712005/service-track-api)). O
+deploy da imagem é dirigido de lá ([ADR-015](docs/adr/ADR-015-cd-imagem-por-ambiente.md)):
+
+```
+repo da API: push → build → push no ECR (servicetrack-<env>-app, tag = commit SHA)
+                                   │ repository_dispatch (image-published)
+                                   ▼
+este repo: deploy-image.yml → reescreve newTag do overlay → commit em main
+                                   │
+                                   ▼
+             ArgoCD sincroniza → novo Deployment
+```
+
+A esteira da API precisa de:
+
+1. Credenciais AWS para `docker push` no ECR do ambiente
+   (`servicetrack-hml-app` / `servicetrack-prd-app`).
+2. Tag da imagem = **commit SHA** (o repo ECR é `IMMUTABLE`).
+3. O secret `IAC_REPO_TOKEN` (item 2 acima) e, ao fim do push, o dispatch:
+
+   ```yaml
+   - uses: peter-evans/repository-dispatch@v3
+     with:
+       token: ${{ secrets.IAC_REPO_TOKEN }}
+       repository: Claudio712005/service-track-aws-iac
+       event-type: image-published
+       client-payload: '{"environment":"prd","image_tag":"${{ github.sha }}"}'
+   ```
+
+O gate de vulnerabilidade (scan do ECR) é responsabilidade da CI da API: cheque
+os *findings* antes de disparar o dispatch
+([ADR-016](docs/adr/ADR-016-seguranca-supply-chain.md)). Este repo só recebe a
+tag já aprovada.
+
+> No primeiro deploy de um ambiente a imagem ainda não existe no ECR: os pods
+> ficam em `ImagePullBackOff` até o primeiro `image-published`.
+
 ## Deploy pela pipeline
 
-Toda a operação é feita pelas esteiras do GitHub Actions
-(**Actions → escolha a esteira → Run workflow**). São quatro:
+Toda a operação de **infraestrutura** é feita pelas esteiras do GitHub Actions
+(**Actions → escolha a esteira → Run workflow**). São cinco:
 
 | Esteira | Quando |
 |---|---|
 | **Contract** | automática, em push/PR que toca o contrato ou os módulos do gateway |
 | **Terraform** | manual — `plan`, `apply` ou `destroy` de um ambiente |
+| **Deploy image (bump)** | disparada pelo repo da API — atualiza a tag da imagem |
 | **DNS (zona persistente)** | manual — uma vez, para criar a hosted zone |
 | **DNS (publicar dominio em PRD)** | manual — depois de configurar o Registro.br |
 
@@ -161,7 +306,12 @@ qualquer coisa.
 HML é o ambiente enxuto: **sem domínio próprio, sem LoadBalancer do ArgoCD e sem
 métricas detalhadas do CloudWatch**, para liberar orçamento para observabilidade.
 
-**Pré-requisitos:** secrets da AWS renovados (acima). Nada além disso.
+**Pré-requisitos:**
+
+1. Secrets da AWS renovados (acima).
+2. Segredos da aplicação e da Lambda fornecidos como variáveis Terraform, se você
+   quer a aplicação funcional — ver [Secrets e credenciais](#secrets-e-credenciais).
+   Sem eles, a infraestrutura sobe, mas a app fica sem JWT/DB.
 
 1. **Actions → Terraform → Run workflow**
    - `action`: `apply`
@@ -192,7 +342,8 @@ PRD é o único ambiente que usa o domínio `clausilva.com.br`.
 **Pré-requisitos:**
 
 1. Secrets da AWS renovados.
-2. **DNS configurado** — só na primeira vez, ou se a hosted zone for recriada.
+2. Segredos da aplicação e da Lambda (ver [Secrets e credenciais](#secrets-e-credenciais)).
+3. **DNS configurado** — só na primeira vez, ou se a hosted zone for recriada.
    Detalhado na próxima seção.
 
 Com o DNS já delegado, o deploy é igual ao de HML:
@@ -425,7 +576,8 @@ partir do RDS. A configuração JWT segue o repositório do serviço
 - As chaves RS256 devem ser entregues em runtime, nunca versionadas. Passe o conteúdo
   PEM pela variável `lambda_extra_env` (ex.: `MP_JWT_VERIFY_PUBLICKEY` e
   `SMALLRYE_JWT_SIGN_KEY`), preferencialmente via `TF_VAR_lambda_extra_env` na
-  pipeline em vez de gravar em arquivo.
+  pipeline em vez de gravar em arquivo. Como gerar o par: ver
+  [Secrets e credenciais](#secrets-e-credenciais).
 
 ## Scripts
 

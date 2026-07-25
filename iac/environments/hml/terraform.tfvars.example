@@ -21,3 +21,12 @@ lambda_image_tag = "bootstrap"
 #   hosted_zone_name = "api.clausilva.com.br"
 #   base_path        = "service-track/v1"
 # }
+
+# Segredos da aplicacao, gravados no SSM e materializados como secrets do k8s.
+# Ver secao "Secrets e credenciais" no README. Vazio = passo ignorado.
+# app_secret_params = {
+#   "service-track-secret" = "APP_DB_USER=app_user\nAPP_DB_PASSWORD=...\nFLYWAY_DB_USER=flyway_user\nFLYWAY_DB_PASSWORD=...\nUNSPLASH_CHAVE_ACESSO=...\nRESEND_API_KEY=..."
+#   "db-init-creds"        = "POSTGRES_USER=servicetrack\nPOSTGRES_PASSWORD=...\nPOSTGRES_DB=servicetrack\nAPP_DB_USER=app_user\nAPP_DB_PASSWORD=...\nFLYWAY_DB_USER=flyway_user\nFLYWAY_DB_PASSWORD=..."
+#   "jwt-private"          = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+#   "jwt-public"           = "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
+# }
