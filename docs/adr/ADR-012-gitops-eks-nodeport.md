@@ -26,7 +26,7 @@ coisas estavam quebradas:
 ### 1. O deploy passa a ser GitOps de ponta a ponta
 
 O `terraform apply` instala o ArgoCD (Helm) e, uma única vez, aplica o
-`AppProject` e um **app-of-apps** (`kubernetes/argocd/root-app.yaml`) via
+`AppProject` e a **Application do ambiente** (`service-track-<env>`) via
 `scripts/argocd-bootstrap-apply.sh` (um `null_resource` no `modules/stack`). A
 partir daí o ArgoCD sincroniza a aplicação a partir do git — ninguém mais roda
 `kubectl apply` na aplicação.
@@ -39,17 +39,19 @@ também passou a listar os kinds filho (`Pod`, `ReplicaSet`, `Endpoints`,
 **Por que um passo imperativo (`kubectl`) no meio de IaC declarativa:** os CRDs do
 ArgoCD só existem depois que o chart sobe, no mesmo apply. `kubernetes_manifest`
 exige o CRD em tempo de `plan` → falharia no primeiro apply. O `null_resource`
-"empurra" o app-of-apps uma vez; o Argo assume o controle de drift dali em
+"empurra" a Application uma vez; o Argo assume o controle de drift dali em
 diante. É o padrão de bootstrap do bootstrapper. Roda só no primeiro apply ou
 quando os manifests de bootstrap mudam (trigger por `filesha1`).
 
-### 2. app-of-apps só com o ambiente do cluster
+### 2. Uma Application por ambiente, não app-of-apps
 
-`kubernetes/argocd/root-app.yaml` aponta para `kubernetes/argocd/applications/`
-com `recurse: false`, que hoje contém apenas `service-track-prod`. O app `local`
-(cluster kind, dev) foi movido para `kubernetes/argocd/local/` e é aplicado à
-mão — não entra no app-of-apps do EKS, senão o Argo tentaria subir Postgres e
-NodePort de dev no cluster gerenciado.
+HML e PRD são **clusters separados**. Um app-of-apps que varresse
+`applications/` aplicaria as duas Applications em cada cluster (ambas apontam
+para `kubernetes.default.svc`), fazendo o cluster de HML tentar subir o overlay
+de PRD e vice-versa. Por isso o bootstrap aplica **só a Application do próprio
+ambiente** (`service-track-hml` ou `service-track-prod`), escolhida por
+`var.environment`. O app `local` (kind, dev) fica em `kubernetes/argocd/local/` e
+é aplicado à mão.
 
 ### 3. Exposição por NodePort interno, sem LoadBalancer público
 

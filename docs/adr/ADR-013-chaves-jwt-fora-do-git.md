@@ -46,6 +46,8 @@ onde a aplicação lê a chave (`SMALLRYE_JWT_SIGN_KEY_LOCATION`), e o secret
 - Como as chaves de dev nunca saíram da máquina, não há necessidade de rotação.
   Se em algum momento uma chave de dev tiver sido usada em ambiente real, gere um
   par novo com `FORCE=true` e rotacione o consumidor.
-- A entrega do secret de prod fora do git fica como ponto que depende de processo
-  (não é reproduzível por `terraform apply`). Evolução possível: SSM Parameter
-  Store ou Sealed Secrets para versionar a referência sem versionar o material.
+- A entrega dos secrets de HML/PRD passou a ser reprodutível via **SSM Parameter
+  Store** (SecureString), materializados no cluster no apply por
+  `scripts/app-secrets-bootstrap.sh` a partir de `app_secret_params`. O material
+  fica no SSM (cifrado), não no git; `terraform apply` reconstrói o vínculo. Ver
+  [ADR-016](ADR-016-seguranca-supply-chain.md).

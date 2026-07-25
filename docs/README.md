@@ -17,6 +17,9 @@
 | [011](adr/ADR-011-rate-limiting-defesa-em-camadas.md) | Rate limiting e defesa em camadas na borda |
 | [012](adr/ADR-012-gitops-eks-nodeport.md) | Deploy por GitOps e exposição por NodePort |
 | [013](adr/ADR-013-chaves-jwt-fora-do-git.md) | Chaves JWT fora do git |
+| [014](adr/ADR-014-estrategia-de-custo-conta-estudante.md) | Estratégia de custo na conta de estudante |
+| [015](adr/ADR-015-cd-imagem-por-ambiente.md) | CD por bump de imagem, repositório ECR por ambiente |
+| [016](adr/ADR-016-seguranca-supply-chain.md) | Segurança da cadeia de entrega da imagem |
 
 ## RFC
 
