@@ -39,3 +39,9 @@ stage:
   dataTrace: false
 
   accessLogRetentionDays: 3
+
+# WAF desligado em HML por custo (~US$ 5/mes + regra). A defesa fica no throttle
+# do usage plan. Ver ADR-011.
+waf:
+  enabled: false
+  rateLimit: 2000

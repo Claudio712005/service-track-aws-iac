@@ -2,6 +2,11 @@ locals {
   cors = yamldecode(file(var.cors_config_path))["cors"]
   plan = yamldecode(file(var.usage_plan_config_path))
 
+  # Defesa por IP no nivel de rede, complementar ao throttle por API key do
+  # usage plan. Ligada so onde o config declara waf.enabled (hoje: PRD).
+  waf         = try(local.plan["waf"], { enabled = false })
+  waf_enabled = try(local.waf["enabled"], false)
+
   cors_response_headers = merge(
     {
       "method.response.header.Access-Control-Allow-Origin"  = "'${local.cors.allowOrigin}'"
@@ -395,4 +400,62 @@ resource "aws_route53_record" "api" {
     zone_id                = aws_api_gateway_domain_name.this[0].regional_zone_id
     evaluate_target_health = false
   }
+}
+
+# -----------------------------------------------------------------------------
+# WAF (opcional, por ambiente)
+#
+# Regra rate-based por IP de origem: acima do limite em janela de 5 min, o IP e
+# bloqueado ate cair abaixo. Complementa o usage plan, que limita por API key --
+# o WAF barra flood distribuido/anonimo antes de gastar a Lambda ou o backend.
+# Escopo REGIONAL, associado ao stage do REST API. Ver ADR-011.
+# -----------------------------------------------------------------------------
+
+resource "aws_wafv2_web_acl" "this" {
+  count = local.waf_enabled ? 1 : 0
+
+  name        = "${var.name}-${var.environment}-waf"
+  description = "Rate limiting por IP na borda do API Gateway (${var.environment})"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "rate-limit-por-ip"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = try(local.waf["rateLimit"], 2000)
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.name}-${var.environment}-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${var.name}-${var.environment}-waf"
+    sampled_requests_enabled   = true
+  }
+
+  tags = var.tags
+}
+
+resource "aws_wafv2_web_acl_association" "this" {
+  count = local.waf_enabled ? 1 : 0
+
+  resource_arn = aws_api_gateway_stage.this.arn
+  web_acl_arn  = aws_wafv2_web_acl.this[0].arn
 }
