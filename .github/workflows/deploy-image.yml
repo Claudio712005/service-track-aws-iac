@@ -1,0 +1,98 @@
+name: Deploy image (bump)
+
+run-name: "Bump ${{ github.event.client_payload.environment || inputs.environment }} -> ${{ github.event.client_payload.image_tag || inputs.image_tag }}"
+
+on:
+  repository_dispatch:
+    types: [image-published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options:
+          - hml
+          - prd
+      image_tag:
+        description: "Tag da imagem publicada no ECR (SHA do commit)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-image-${{ github.event.client_payload.environment || inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: "Bump da imagem"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolver entradas
+        id: in
+        run: |
+          ENVIRONMENT="${{ github.event.client_payload.environment || inputs.environment }}"
+          IMAGE_TAG="${{ github.event.client_payload.image_tag || inputs.image_tag }}"
+
+          case "$ENVIRONMENT" in
+            hml|prd) ;;
+            *) echo "::error::environment invalido: '$ENVIRONMENT' (use hml ou prd)"; exit 1 ;;
+          esac
+          if ! printf '%s' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9._-]{1,128}$'; then
+            echo "::error::image_tag invalida: '$IMAGE_TAG'"; exit 1
+          fi
+
+          echo "environment=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=kubernetes/k8s/overlays/$ENVIRONMENT/kustomization.yaml" >> "$GITHUB_OUTPUT"
+
+      - name: Atualizar a tag
+        id: bump
+        run: |
+          FILE="${{ steps.in.outputs.file }}"
+          TAG="${{ steps.in.outputs.image_tag }}"
+          CURRENT="$(grep -E '^  newTag:' "$FILE" | awk '{print $2}')"
+          if [ "$CURRENT" = "$TAG" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Tag ja e $TAG; nada a fazer."
+            exit 0
+          fi
+          sed -i -E "s|^  newTag: .*|  newTag: $TAG|" "$FILE"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "previous=$CURRENT" >> "$GITHUB_OUTPUT"
+
+      - name: Commit e push
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          git config user.name "servicetrack-ci"
+          git config user.email "ci@servicetrack.local"
+          git add "${{ steps.in.outputs.file }}"
+          git commit -m "deploy(${{ steps.in.outputs.environment }}): imagem ${{ steps.in.outputs.image_tag }}"
+          git push origin main
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "## Deploy image — ${{ steps.in.outputs.environment }}"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Ambiente | \`${{ steps.in.outputs.environment }}\` |"
+            echo "| Tag | \`${{ steps.in.outputs.image_tag }}\` |"
+            echo "| Alterado | ${{ steps.bump.outputs.changed }} |"
+            echo "| Tag anterior | \`${{ steps.bump.outputs.previous }}\` |"
+            echo ""
+            if [ "${{ steps.bump.outputs.changed }}" = "true" ]; then
+              echo "Commit feito em main. O ArgoCD sincroniza a aplicacao automaticamente."
+            else
+              echo "Sem mudanca de tag."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
