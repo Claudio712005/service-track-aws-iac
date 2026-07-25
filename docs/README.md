@@ -14,6 +14,9 @@
 | [008](adr/ADR-008-dominio-customizado-opcional.md) | Domínio customizado opcional com base path |
 | [009](adr/ADR-009-multiplas-api-keys-por-consumidor.md) | Uma API key por consumidor |
 | [010](adr/ADR-010-contract-testing-na-pipeline.md) | Contract testing em duas camadas |
+| [011](adr/ADR-011-rate-limiting-defesa-em-camadas.md) | Rate limiting e defesa em camadas na borda |
+| [012](adr/ADR-012-gitops-eks-nodeport.md) | Deploy por GitOps e exposição por NodePort |
+| [013](adr/ADR-013-chaves-jwt-fora-do-git.md) | Chaves JWT fora do git |
 
 ## RFC
 

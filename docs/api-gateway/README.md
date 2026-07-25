@@ -222,6 +222,23 @@ Para alterar um limite: editar o YAML e `terraform apply`. Não se toca em HCL.
 As API keys são geradas a cada criação do ambiente e **não são versionadas**
 ([ADR-006](../adr/ADR-006-ambientes-efemeros-e-conta-educacional.md)).
 
+### WAF rate-based (defesa por IP)
+
+O usage plan limita **por API key**; não protege contra flood de quem não tem
+key. Em **PRD** um AWS WAF rate-based fecha essa lacuna, bloqueando o IP que
+passa de `waf.rateLimit` (2.000) requisições em 5 minutos. Configurado em
+`usage-plan/config-PRD.yaml`:
+
+```yaml
+waf:
+  enabled: true
+  rateLimit: 2000
+```
+
+Em **HML** fica `enabled: false` (custo). A ordem completa das camadas de defesa
+e os valores por ambiente estão na
+[ADR-011](../adr/ADR-011-rate-limiting-defesa-em-camadas.md).
+
 ## CORS
 
 Definido em `api-configuration/cors/config-<ENV>.yaml`.
