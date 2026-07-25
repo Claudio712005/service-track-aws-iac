@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: service-track-hml
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: service-track
+  source:
+    repoURL: https://github.com/Claudio712005/service-track-aws-iac.git
+    targetRevision: main
+    path: kubernetes/k8s/overlays/hml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: service-track
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

@@ -5,13 +5,12 @@ namespace: service-track
 
 resources:
 - ../../base
-- hpa.yaml
 - service-nodeport.yaml
 
 images:
 - name: servicetrack-api
-  newName: 123124496645.dkr.ecr.us-east-1.amazonaws.com/servicetrack-prd-app
-  newTag: 564b927b6433d95528711b945c89afa53aaef3e0
+  newName: 123124496645.dkr.ecr.us-east-1.amazonaws.com/servicetrack-hml-app
+  newTag: latest
 
 configMapGenerator:
 - literals:
