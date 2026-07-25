@@ -195,3 +195,14 @@ variable "bootstrap_argocd_apps" {
   type        = bool
   default     = true
 }
+
+variable "ecr_max_image_count" {
+  type    = number
+  default = 10
+}
+
+variable "app_secret_params" {
+  type      = map(string)
+  default   = {}
+  sensitive = true
+}

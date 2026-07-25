@@ -37,3 +37,9 @@ variable "bootstrap_argocd_apps" {
   type        = bool
   default     = true
 }
+
+variable "app_secret_params" {
+  type      = map(string)
+  default   = {}
+  sensitive = true
+}

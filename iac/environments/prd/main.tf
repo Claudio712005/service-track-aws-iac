@@ -35,4 +35,5 @@ module "stack" {
     base_path        = var.api_base_path
   } : null
   bootstrap_argocd_apps = var.bootstrap_argocd_apps
+  app_secret_params     = var.app_secret_params
 }

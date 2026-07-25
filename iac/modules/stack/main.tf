@@ -69,8 +69,31 @@ module "addons" {
 locals {
   argocd_bootstrap_files = [
     "${path.module}/../../../kubernetes/argocd/projects/service-track.appproject.yaml",
-    "${path.module}/../../../kubernetes/argocd/root-app.yaml",
+    "${path.module}/../../../kubernetes/argocd/applications/service-track-${var.environment}.application.yaml",
   ]
+}
+
+module "app_secrets" {
+  source = "../app-secrets"
+
+  name_prefix = "/servicetrack/${var.environment}"
+  params      = var.app_secret_params
+  tags        = local.tags
+}
+
+resource "null_resource" "app_secrets_bootstrap" {
+  count = var.bootstrap_argocd_apps && length(module.app_secrets.parameter_names) > 0 ? 1 : 0
+
+  triggers = {
+    params  = join(",", module.app_secrets.parameter_names)
+    cluster = module.eks.cluster_name
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/../../../scripts/app-secrets-bootstrap.sh ${module.eks.cluster_name} ${data.aws_region.current.name} ${module.app_secrets.name_prefix}"
+  }
+
+  depends_on = [module.addons]
 }
 
 resource "null_resource" "argocd_bootstrap" {
@@ -82,26 +105,30 @@ resource "null_resource" "argocd_bootstrap" {
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/../../../scripts/argocd-bootstrap-apply.sh ${module.eks.cluster_name} ${data.aws_region.current.name}"
+    command = "${path.module}/../../../scripts/argocd-bootstrap-apply.sh ${module.eks.cluster_name} ${data.aws_region.current.name} ${var.environment}"
   }
 
-  depends_on = [module.addons]
+  depends_on = [module.addons, null_resource.app_secrets_bootstrap]
 }
 
 # Repositorio ECR da imagem da aplicacao (deploy no EKS).
 module "ecr_app" {
   source = "../ecr"
 
-  repository_name = "${var.project}-app"
-  tags            = local.tags
+  repository_name      = "${local.name}-app"
+  image_tag_mutability = "IMMUTABLE"
+  max_image_count      = var.ecr_max_image_count
+  tags                 = local.tags
 }
 
 # Repositorio ECR da imagem da Lambda de autenticacao.
 module "ecr_lambda" {
   source = "../ecr"
 
-  repository_name = "${local.name}-auth-lambda"
-  tags            = local.tags
+  repository_name      = "${local.name}-auth-lambda"
+  image_tag_mutability = "MUTABLE"
+  max_image_count      = var.ecr_max_image_count
+  tags                 = local.tags
 }
 
 module "rds" {

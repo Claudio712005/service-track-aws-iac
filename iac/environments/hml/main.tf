@@ -30,4 +30,5 @@ module "stack" {
   enable_jwt_authorizer = var.enable_jwt_authorizer
   jwt_public_key        = var.jwt_public_key
   bootstrap_argocd_apps = var.bootstrap_argocd_apps
+  app_secret_params     = var.app_secret_params
 }
