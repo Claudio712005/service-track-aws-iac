@@ -1,9 +1,15 @@
 # service-track-aws-iac
 
 Infraestrutura como código (Terraform) do ambiente AWS da aplicação ServiceTrack.
-Provisiona rede, cluster Kubernetes gerenciado (EKS), banco PostgreSQL (RDS),
-repositórios de imagem (ECR), GitOps (ArgoCD), o serviço de autenticação em
-AWS Lambda (Quarkus/Kotlin) e a exposição externa da API por API Gateway.
+Provisiona rede, cluster Kubernetes gerenciado (EKS), repositórios de imagem (ECR),
+GitOps (ArgoCD), o serviço de autenticação em AWS Lambda (Quarkus/Kotlin) e a
+exposição externa da API por API Gateway.
+
+> **O banco de dados não vive mais aqui.** O RDS foi para
+> [service-track-db-infra](https://github.com/Claudio712005/service-track-db-infra),
+> junto com o orçamento de conexões e as roles de runtime (`DB-ADR-003`).
+> Este repositório lê endpoint, credenciais e tamanhos de pool do SSM, e cria as
+> regras de entrada na porta 5432 do security group do banco.
 
 O código é organizado em módulos reutilizáveis e dois ambientes isolados,
 homologação (`hml`) e produção (`prd`), cada um com seu próprio state e sizing.
@@ -19,13 +25,14 @@ apis/
       usage-plan/config-{HML,PRD}.yaml Throttling, quota, consumidores e logs
 
 iac/
+  network/
+    hml/ prd/      VPC e subnets - state proprio, PRIMEIRA fase de cada ambiente
   bootstrap/
     dns/           Hosted zone Route53 - PERSISTENTE, state proprio, aplicada uma vez
   modules/
     network/       VPC, subnets publicas/privadas, IGW, NAT, rotas
     eks/           Cluster EKS + node group
     addons/        ArgoCD e metrics-server (Helm)
-    rds/           PostgreSQL + security group
     ecr/           Repositorio de imagem (reutilizavel)
     lambda/        Lambda de autenticacao (imagem de container) + SG + logs
     lambda-authorizer/ Authorizer de JWT na borda (Go, provided.al2023) + testes
@@ -43,6 +50,7 @@ docs/
   api-gateway/     Guia tecnico e operacional do gateway
 
 .github/workflows/
+  network.yml        Aplica a rede do ambiente (manual) - primeira fase
   contract.yml       Valida contrato + authorizer + fmt/validate (push e PR)
   terraform.yml      plan / apply / destroy por ambiente (manual)
   dns-bootstrap.yml  Cria a hosted zone persistente e imprime os NS (manual)
@@ -62,9 +70,10 @@ ambiente.
   subnets privadas. Usa a role `LabRole` da conta (ambiente educacional AWS).
 - **Addons** (`modules/addons`) — ArgoCD e metrics-server via Helm. O metrics-server
   habilita o HPA; o ArgoCD pode ser exposto por LoadBalancer (`argocd_expose_lb`).
-- **RDS** (`modules/rds`) — PostgreSQL privado, criptografado, com senha gerada
-  aleatoriamente. Acesso na porta 5432 liberado apenas para os security groups
-  autorizados (nodes EKS e Lambda).
+- **Banco** — provisionado em outro repositório. Este stack lê `endpoint`, `port`,
+  `name`, `username`, `password`, `security-group-id` e os tamanhos de pool de
+  `/servicetrack/<env>/db/*` no SSM, e cria as regras de entrada na porta 5432 do
+  security group do banco a partir dos nodes do EKS e da Lambda.
 - **ECR** (`modules/ecr`) — repositórios de imagem: um para a aplicação (deploy no
   EKS) e um para a Lambda de autenticação.
 - **Lambda** (`modules/lambda`) — função de autenticação empacotada como imagem de
@@ -268,15 +277,36 @@ tag já aprovada.
 ## Deploy pela pipeline
 
 Toda a operação de **infraestrutura** é feita pelas esteiras do GitHub Actions
-(**Actions → escolha a esteira → Run workflow**). São cinco:
+(**Actions → escolha a esteira → Run workflow**). São seis:
 
 | Esteira | Quando |
 |---|---|
+| **Network** | manual — **primeira fase** de qualquer ambiente, antes do banco |
 | **Contract** | automática, em push/PR que toca o contrato ou os módulos do gateway |
 | **Terraform** | manual — `plan`, `apply` ou `destroy` de um ambiente |
 | **Deploy image (bump)** | disparada pelo repo da API — atualiza a tag da imagem |
 | **DNS (zona persistente)** | manual — uma vez, para criar a hosted zone |
 | **DNS (publicar dominio em PRD)** | manual — depois de configurar o Registro.br |
+
+---
+
+## Ordem de subida de um ambiente
+
+Os ambientes são efêmeros e esta ordem vale para **toda** recriação. Ela existe porque o
+banco precisa da VPC para nascer, e este stack precisa do banco (`DB-ADR-003`).
+
+| # | Repositório | Esteira | O quê |
+|---|---|---|---|
+| 1 | este | **Network** → `apply` | VPC e subnets |
+| 2 | `service-track-db-infra` | **Terraform** → `apply` | RDS, parameter group, SSM |
+| 3 | este | **Terraform** → `apply` | EKS, Lambda, gateway, ingress no SG do banco |
+| 4 | `service-track-db-infra` | `scripts/aplicar-roles.sh` | roles `flyway_user` e `app_user` |
+
+A esteira **Terraform** confere as fases 1 e 2 antes de começar e falha com mensagem
+explícita apontando o que rodar antes, em vez de quebrar com erro de atributo inexistente.
+
+**Destruir é a ordem inversa:** stack → banco → rede. Destruir a rede com banco de pé deixa
+recursos órfãos e o `destroy` da VPC falha.
 
 ### Antes de qualquer esteira: renovar as credenciais da AWS
 
