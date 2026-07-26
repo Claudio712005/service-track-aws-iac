@@ -62,6 +62,8 @@ spec:
       - kind: ConfigMap
         name: service-track-runtime
       - kind: ConfigMap
+        name: service-track-db
+      - kind: ConfigMap
         name: db-init-script
       - kind: ConfigMap
         name: kube-root-ca.crt
