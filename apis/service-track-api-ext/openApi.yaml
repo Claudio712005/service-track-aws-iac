@@ -69,9 +69,9 @@ paths:
         passthroughBehavior: when_no_match
     options: ${cors_options}
 
-  /autenticacao/reset-senha:
-    post:
-      operationId: resetarSenha
+  /usuarios/senha:
+    put:
+      operationId: alterarSenha
       security:
       - ApiKeyAuth: []
         bearerAuth: []
@@ -80,16 +80,18 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResetarSenhaRequest'
+              $ref: '#/components/schemas/AlterarSenhaRequest'
       responses:
         '204': { description: No Content }
         '400': { $ref: '#/components/responses/Erro' }
         '401': { $ref: '#/components/responses/Erro' }
         '404': { $ref: '#/components/responses/Erro' }
       x-amazon-apigateway-integration:
-        type: aws_proxy
-        httpMethod: POST
-        uri: ${auth_lambda_uri}
+        type: http_proxy
+        httpMethod: PUT
+        uri: http://${app_backend_host}/usuarios/senha
+        connectionType: VPC_LINK
+        connectionId: ${vpc_link_id}
         passthroughBehavior: when_no_match
     options: ${cors_options}
 
@@ -1668,36 +1670,36 @@ components:
     LoginRequest:
       type: object
       required:
-      - email
+      - cpf
       - senha
       properties:
-        email:
+        cpf:
           type: string
-          format: email
+          description: CPF do cliente, com ou sem pontuacao. O digito verificador e validado.
+          pattern: '^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$'
+          example: '529.982.247-25'
         senha:
           type: string
           format: password
-          minLength: 6
+          minLength: 8
 
     LoginResponse:
       type: object
+      description: |
+        A identidade do usuario viaja no proprio JWT: `sub` traz o usuarioId,
+        `groups` traz as roles e a claim `cpf` traz o CPF autenticado.
       properties:
         token:
           type: string
-        usuarioId:
+        tipo:
           type: string
-          format: uuid
-        nome:
-          type: string
-        email:
-          type: string
-          format: email
-        roles:
-          type: array
-          items:
-            type: string
+          example: Bearer
+        expiraEmSegundos:
+          type: integer
+          format: int64
+          example: 3600
 
-    ResetarSenhaRequest:
+    AlterarSenhaRequest:
       type: object
       required:
       - senhaAtual
