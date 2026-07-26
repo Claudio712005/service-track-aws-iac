@@ -1,0 +1,81 @@
+name: Network
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Operacao a executar
+        required: true
+        type: choice
+        options: [plan, apply, destroy]
+        default: plan
+      env:
+        description: Ambiente alvo
+        required: true
+        type: choice
+        options: [hml, prd]
+        default: hml
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.10.5
+
+# Primeira fase de qualquer ambiente. A VPC precisa existir antes do banco, que
+# vive em service-track-db-infra, e o banco antes do stack. Ver DB-ADR-003.
+jobs:
+  network:
+    name: ${{ inputs.action }} da rede de ${{ inputs.env }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env }}
+    defaults:
+      run:
+        working-directory: iac/network/${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      - name: terraform plan
+        run: terraform plan -input=false -out=plano
+
+      - name: apply
+        if: inputs.action == 'apply'
+        run: terraform apply -input=false -auto-approve plano
+
+      - name: Destruir exige que banco e stack ja tenham saido
+        if: inputs.action == 'destroy'
+        run: |
+          echo "::warning::Destruir a rede com banco ou stack de pe deixa recursos orfaos."
+          echo "::warning::Ordem correta de destruicao: stack -> banco -> rede."
+
+      - name: destroy
+        if: inputs.action == 'destroy'
+        run: terraform destroy -input=false -auto-approve
+
+      - name: Resumo
+        if: inputs.action == 'apply'
+        run: |
+          {
+            echo "### Rede de ${{ inputs.env }}"
+            echo
+            echo "- VPC: \`$(terraform output -raw vpc_id)\`"
+            echo "- CIDR: \`$(terraform output -raw vpc_cidr)\`"
+            echo
+            echo "Proximo passo: aplicar o ambiente no repositorio service-track-db-infra."
+          } >> "$GITHUB_STEP_SUMMARY"

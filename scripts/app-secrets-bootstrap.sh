@@ -49,4 +49,22 @@ if [ -n "$priv" ] && [ -n "$pub" ]; then
     --from-file=publicKey.pem="$WORKDIR/publicKey.pem"
 fi
 
+# Configuracao de banco e orcamento de pool vem do repositorio service-track-db-infra,
+# publicados no SSM. Materializados aqui como ConfigMap para que a aplicacao os
+# consuma sem que o numero seja repetido em dois repositorios.
+JDBC="$(fetch db/jdbc-url || true)"
+POOL_API="$(fetch db/pool/api-max-size || true)"
+POOL_MIG="$(fetch db/pool/api-migration-max-size || true)"
+
+if [ -n "$JDBC" ]; then
+  kubectl create configmap service-track-db -n "$NAMESPACE" \
+    --from-literal=DB_JDBC_URL="$JDBC" \
+    --from-literal=DB_POOL_MAX_SIZE="${POOL_API:-8}" \
+    --from-literal=DB_POOL_MIGRATION_MAX_SIZE="${POOL_MIG:-2}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  echo ">> configmap service-track-db aplicado (pool: ${POOL_API:-8} + ${POOL_MIG:-2} por pod)"
+else
+  echo "!! $PREFIX/db/jdbc-url ausente: aplique primeiro o repositorio service-track-db-infra" >&2
+fi
+
 echo ">> secrets sincronizados do SSM ($PREFIX)"

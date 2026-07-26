@@ -13,22 +13,6 @@ variable "tags" {
   default = {}
 }
 
-variable "vpc_cidr" {
-  type = string
-}
-
-variable "azs" {
-  type = list(string)
-}
-
-variable "public_subnet_cidrs" {
-  type = list(string)
-}
-
-variable "private_subnet_cidrs" {
-  type = list(string)
-}
-
 variable "cluster_version" {
   type    = string
   default = "1.30"
@@ -63,30 +47,6 @@ variable "metrics_server_chart_version" {
 variable "argocd_expose_lb" {
   type    = bool
   default = true
-}
-
-variable "db_name" {
-  type    = string
-  default = "servicetrack"
-}
-
-variable "db_username" {
-  type    = string
-  default = "servicetrack"
-}
-
-variable "db_instance_class" {
-  type = string
-}
-
-variable "db_allocated_storage" {
-  type    = number
-  default = 20
-}
-
-variable "db_engine_version" {
-  type    = string
-  default = "16.9"
 }
 
 variable "lambda_image_tag" {
@@ -205,4 +165,10 @@ variable "app_secret_params" {
   type      = map(string)
   default   = {}
   sensitive = true
+}
+
+variable "state_bucket" {
+  description = "Bucket do backend remoto. Usado para ler o state de rede do ambiente."
+  type        = string
+  default     = "servicetrack-tfstate-123124496645"
 }

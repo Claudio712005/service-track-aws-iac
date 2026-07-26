@@ -24,19 +24,20 @@ output "lambda_ecr_repository_url" {
 }
 
 output "rds_endpoint" {
-  value = module.rds.address
+  description = "Lido do SSM publicado pelo repositorio service-track-db-infra."
+  value       = local.db_endpoint
 }
 
 output "rds_jdbc_url" {
-  value = module.rds.jdbc_url
+  value = "jdbc:postgresql://${local.db_endpoint}:${local.db_port}/${local.db_name}"
 }
 
 output "db_username" {
-  value = module.rds.username
+  value = local.db_username
 }
 
 output "db_password" {
-  value     = module.rds.password
+  value     = local.db_password
   sensitive = true
 }
 

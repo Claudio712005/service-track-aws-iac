@@ -25,16 +25,70 @@ data "aws_iam_role" "lab" {
   name = "LabRole"
 }
 
-module "network" {
-  source = "../network"
+# A rede e aplicada antes, em iac/network/<env>, e vive em state proprio. E o que
+# permite ao repositorio de banco entrar na VPC sem que este state conheca o
+# banco. Ver DB-ADR-003.
+data "terraform_remote_state" "network" {
+  backend = "s3"
 
-  name                 = local.name
-  tags                 = local.tags
-  cluster_name         = local.cluster_name
-  vpc_cidr             = var.vpc_cidr
-  azs                  = var.azs
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
+  config = {
+    bucket = var.state_bucket
+    key    = "servicetrack/${var.environment}-network/terraform.tfstate"
+    region = data.aws_region.current.name
+  }
+}
+
+# O banco pertence ao repositorio service-track-db-infra e e aplicado entre a
+# rede e este stack. O contrato entre os dois sao estes parametros nomeados.
+data "aws_ssm_parameter" "db_endpoint" {
+  name = "/${var.project}/${var.environment}/db/endpoint"
+}
+
+data "aws_ssm_parameter" "db_port" {
+  name = "/${var.project}/${var.environment}/db/port"
+}
+
+data "aws_ssm_parameter" "db_name" {
+  name = "/${var.project}/${var.environment}/db/name"
+}
+
+data "aws_ssm_parameter" "db_username" {
+  name = "/${var.project}/${var.environment}/db/username"
+}
+
+data "aws_ssm_parameter" "db_password" {
+  name            = "/${var.project}/${var.environment}/db/password"
+  with_decryption = true
+}
+
+data "aws_ssm_parameter" "db_security_group_id" {
+  name = "/${var.project}/${var.environment}/db/security-group-id"
+}
+
+data "aws_ssm_parameter" "pool_api_max_size" {
+  name = "/${var.project}/${var.environment}/db/pool/api-max-size"
+}
+
+data "aws_ssm_parameter" "pool_api_migration_max_size" {
+  name = "/${var.project}/${var.environment}/db/pool/api-migration-max-size"
+}
+
+data "aws_ssm_parameter" "pool_lambda_max_size" {
+  name = "/${var.project}/${var.environment}/db/pool/lambda-max-size"
+}
+
+locals {
+  vpc_id             = data.terraform_remote_state.network.outputs.vpc_id
+  private_subnet_ids = data.terraform_remote_state.network.outputs.private_subnet_ids
+  public_subnet_ids  = data.terraform_remote_state.network.outputs.public_subnet_ids
+  vpc_cidr           = data.terraform_remote_state.network.outputs.vpc_cidr
+
+  db_endpoint = data.aws_ssm_parameter.db_endpoint.value
+  db_port     = data.aws_ssm_parameter.db_port.value
+  db_name     = data.aws_ssm_parameter.db_name.value
+  db_username = data.aws_ssm_parameter.db_username.value
+  db_password = data.aws_ssm_parameter.db_password.value
+  db_sg_id    = data.aws_ssm_parameter.db_security_group_id.value
 }
 
 module "eks" {
@@ -44,8 +98,8 @@ module "eks" {
   tags                = local.tags
   cluster_name        = local.cluster_name
   cluster_version     = var.cluster_version
-  public_subnet_ids   = module.network.public_subnet_ids
-  private_subnet_ids  = module.network.private_subnet_ids
+  public_subnet_ids   = local.public_subnet_ids
+  private_subnet_ids  = local.private_subnet_ids
   node_instance_types = var.node_instance_types
   node_desired_size   = var.node_desired_size
   node_min_size       = var.node_min_size
@@ -131,21 +185,6 @@ module "ecr_lambda" {
   tags                 = local.tags
 }
 
-module "rds" {
-  source = "../rds"
-
-  name                       = local.name
-  tags                       = local.tags
-  vpc_id                     = module.network.vpc_id
-  private_subnet_ids         = module.network.private_subnet_ids
-  allowed_security_group_ids = [module.eks.cluster_security_group_id]
-  db_name                    = var.db_name
-  db_username                = var.db_username
-  db_instance_class          = var.db_instance_class
-  db_allocated_storage       = var.db_allocated_storage
-  db_engine_version          = var.db_engine_version
-}
-
 module "lambda_auth" {
   source = "../lambda"
 
@@ -153,20 +192,35 @@ module "lambda_auth" {
   tags               = local.tags
   image_uri          = "${module.ecr_lambda.repository_url}:${var.lambda_image_tag}"
   lab_role_arn       = data.aws_iam_role.lab.arn
-  vpc_id             = module.network.vpc_id
-  private_subnet_ids = module.network.private_subnet_ids
+  vpc_id             = local.vpc_id
+  private_subnet_ids = local.private_subnet_ids
   memory_size        = var.lambda_memory_size
   timeout            = var.lambda_timeout
 
-  db_host     = module.rds.address
-  db_port     = module.rds.port
-  db_name     = module.rds.db_name
-  db_user     = module.rds.username
-  db_password = module.rds.password
+  db_host     = local.db_endpoint
+  db_port     = local.db_port
+  db_name     = local.db_name
+  db_user     = local.db_username
+  db_password = local.db_password
+
+  db_pool_max_size = tonumber(data.aws_ssm_parameter.pool_lambda_max_size.value)
 
   jwt_issuer             = var.jwt_issuer
   jwt_expiration_seconds = var.jwt_expiration_seconds
   extra_env              = var.lambda_extra_env
+}
+
+# O security group do banco nasce sem regras de entrada, no outro repositorio.
+# Quem conhece os consumidores e este state, entao e aqui que as regras sao
+# criadas. Ver DB-ADR-003.
+resource "aws_security_group_rule" "rds_from_eks" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  description              = "PostgreSQL a partir dos nodes do EKS"
+  security_group_id        = local.db_sg_id
+  source_security_group_id = module.eks.cluster_security_group_id
 }
 
 resource "aws_security_group_rule" "rds_from_lambda" {
@@ -174,7 +228,8 @@ resource "aws_security_group_rule" "rds_from_lambda" {
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  security_group_id        = module.rds.security_group_id
+  description              = "PostgreSQL a partir da Lambda de autenticacao"
+  security_group_id        = local.db_sg_id
   source_security_group_id = module.lambda_auth.security_group_id
 }
 
@@ -184,9 +239,9 @@ module "vpc_link" {
 
   name                   = local.name
   tags                   = local.tags
-  vpc_id                 = module.network.vpc_id
-  vpc_cidr               = var.vpc_cidr
-  private_subnet_ids     = module.network.private_subnet_ids
+  vpc_id                 = local.vpc_id
+  vpc_cidr               = local.vpc_cidr
+  private_subnet_ids     = local.private_subnet_ids
   node_asg_names         = module.eks.node_group_asg_names
   node_security_group_id = module.eks.cluster_security_group_id
   node_port              = var.app_node_port
