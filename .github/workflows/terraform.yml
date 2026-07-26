@@ -269,6 +269,28 @@ jobs:
           echo "enable=$ENABLE" >> "$GITHUB_OUTPUT"
           echo "dominio customizado: $ENABLE (zona=$ZONE_EXISTS delegada=$DELEGATED)"
 
+      - name: Conferir pre-requisitos de rede e banco
+        run: |
+          ENV="${{ inputs.env }}"
+          faltando=0
+
+          if ! aws s3api head-object \
+                --bucket servicetrack-tfstate-123124496645 \
+                --key "servicetrack/$ENV-network/terraform.tfstate" >/dev/null 2>&1; then
+            echo "::error::A rede de $ENV nao foi aplicada."
+            echo "::error::Rode antes: Actions -> Network -> apply -> env=$ENV"
+            faltando=1
+          fi
+
+          if ! aws ssm get-parameter --name "/servicetrack/$ENV/db/endpoint" >/dev/null 2>&1; then
+            echo "::error::O banco de $ENV nao foi aplicado."
+            echo "::error::Rode antes a esteira Terraform do repositorio service-track-db-infra (env=$ENV)."
+            faltando=1
+          fi
+
+          [ "$faltando" -eq 0 ] || exit 1
+          echo "rede e banco de $ENV presentes."
+
       - name: Apply fase 1 — ECR
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
