@@ -38,6 +38,8 @@ spec:
                 name: service-track-db
             - secretRef:
                 name: service-track-secret
+            - secretRef:
+                name: service-track-gateway
           volumeMounts:
             - name: jwt-keys
               mountPath: /keys
