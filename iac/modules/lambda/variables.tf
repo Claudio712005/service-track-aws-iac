@@ -75,11 +75,7 @@ variable "extra_env" {
 }
 
 variable "db_pool_max_size" {
-  description = <<-EOT
-    Conexoes maximas por container. A Lambda atende uma requisicao por container de
-    cada vez, entao valor acima de 2 e desperdicio e aumenta a chance de esgotar o
-    banco sob concorrencia. Orcamento definido em service-track-db-infra.
-  EOT
+  description = "Conexoes maximas por container. Orcamento definido em service-track-db-infra. Ver DB-ADR-004."
   type        = number
   default     = 2
 }

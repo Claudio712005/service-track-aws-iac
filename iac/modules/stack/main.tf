@@ -25,9 +25,6 @@ data "aws_iam_role" "lab" {
   name = "LabRole"
 }
 
-# A rede e aplicada antes, em iac/network/<env>, e vive em state proprio. E o que
-# permite ao repositorio de banco entrar na VPC sem que este state conheca o
-# banco. Ver DB-ADR-003.
 data "terraform_remote_state" "network" {
   backend = "s3"
 
@@ -38,8 +35,6 @@ data "terraform_remote_state" "network" {
   }
 }
 
-# O banco pertence ao repositorio service-track-db-infra e e aplicado entre a
-# rede e este stack. O contrato entre os dois sao estes parametros nomeados.
 data "aws_ssm_parameter" "db_endpoint" {
   name = "/${var.project}/${var.environment}/db/endpoint"
 }
@@ -210,9 +205,6 @@ module "lambda_auth" {
   extra_env              = var.lambda_extra_env
 }
 
-# O security group do banco nasce sem regras de entrada, no outro repositorio.
-# Quem conhece os consumidores e este state, entao e aqui que as regras sao
-# criadas. Ver DB-ADR-003.
 resource "aws_security_group_rule" "rds_from_eks" {
   type                     = "ingress"
   from_port                = 5432

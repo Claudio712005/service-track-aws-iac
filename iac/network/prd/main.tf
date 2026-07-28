@@ -1,7 +1,3 @@
-# Primeira fase de qualquer ambiente. Fica em state proprio porque o banco, que
-# vive em outro repositorio, precisa da VPC para existir, e o stack precisa do
-# banco. Sem essa separacao os dois states dependeriam um do outro e nenhum
-# poderia ser aplicado primeiro. Ver DB-ADR-003.
 locals {
   project      = "servicetrack"
   environment  = "prd"
