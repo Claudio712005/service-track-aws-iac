@@ -73,11 +73,12 @@ locals {
   })
 
   body = templatefile(var.openapi_path, {
-    auth_lambda_uri    = var.auth_lambda_invoke_arn
-    app_backend_host   = var.app_backend_host
-    vpc_link_id        = var.vpc_link_id
-    cors_options       = local.cors_options
-    bearer_auth_scheme = local.bearer_auth_scheme
+    auth_lambda_uri       = var.auth_lambda_invoke_arn
+    app_backend_host      = var.app_backend_host
+    vpc_link_id           = var.vpc_link_id
+    cors_options          = local.cors_options
+    bearer_auth_scheme    = local.bearer_auth_scheme
+    gateway_shared_secret = var.gateway_shared_secret
   })
 
   stage_cfg = local.plan["stage"]

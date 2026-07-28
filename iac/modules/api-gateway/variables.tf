@@ -117,3 +117,9 @@ variable "custom_domain" {
     error_message = "custom_domain exige hosted_zone_name, hosted_zone_id ou certificate_arn."
   }
 }
+
+variable "gateway_shared_secret" {
+  description = "Segredo injetado pelo gateway no header x-origem-gateway. A aplicacao recusa requisicao sem ele."
+  type        = string
+  sensitive   = true
+}

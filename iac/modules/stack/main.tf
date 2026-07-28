@@ -1,4 +1,11 @@
+resource "random_password" "gateway_shared_secret" {
+  length  = 48
+  special = false
+}
+
 locals {
+  gateway_shared_secret = coalesce(var.gateway_shared_secret, random_password.gateway_shared_secret.result)
+
   name         = "${var.project}-${var.environment}"
   cluster_name = "${var.project}-${var.environment}"
 
@@ -130,19 +137,35 @@ module "app_secrets" {
   tags        = local.tags
 }
 
+resource "aws_ssm_parameter" "gateway_shared_secret" {
+  name  = "/${var.project}/${var.environment}/gateway/shared-secret"
+  type  = "SecureString"
+  value = local.gateway_shared_secret
+  tags  = local.tags
+}
+
+resource "aws_ssm_parameter" "api_base_url" {
+  name  = "/${var.project}/${var.environment}/api/base-url"
+  type  = "String"
+  value = coalesce(module.api_gateway.custom_domain_url, module.api_gateway.api_endpoint)
+  tags  = local.tags
+}
+
 resource "null_resource" "app_secrets_bootstrap" {
   count = var.bootstrap_argocd_apps && length(module.app_secrets.parameter_names) > 0 ? 1 : 0
 
   triggers = {
-    params  = join(",", module.app_secrets.parameter_names)
-    cluster = module.eks.cluster_name
+    params   = join(",", module.app_secrets.parameter_names)
+    cluster  = module.eks.cluster_name
+    base_url = aws_ssm_parameter.api_base_url.value
+    segredo  = sha256(local.gateway_shared_secret)
   }
 
   provisioner "local-exec" {
     command = "${path.module}/../../../scripts/app-secrets-bootstrap.sh ${module.eks.cluster_name} ${data.aws_region.current.name} ${module.app_secrets.name_prefix}"
   }
 
-  depends_on = [module.addons]
+  depends_on = [module.addons, aws_ssm_parameter.api_base_url, aws_ssm_parameter.gateway_shared_secret]
 }
 
 resource "null_resource" "argocd_bootstrap" {
@@ -273,6 +296,8 @@ module "api_gateway" {
 
   app_backend_host = module.vpc_link.nlb_dns_name
   vpc_link_id      = module.vpc_link.vpc_link_id
+
+  gateway_shared_secret = local.gateway_shared_secret
 
   authorizer_invoke_arn         = var.enable_jwt_authorizer ? module.jwt_authorizer[0].invoke_arn : null
   authorizer_function_name      = var.enable_jwt_authorizer ? module.jwt_authorizer[0].function_name : null

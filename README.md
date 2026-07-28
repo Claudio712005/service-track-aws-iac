@@ -102,7 +102,17 @@ Internet -> API Gateway REST (stage hml|prd)
 ```
 
 Na borda o gateway aplica API Key por consumidor (`x-api-key`), throttling, quota,
-validação de request por JSON Schema e CORS. A validação do JWT fica no backend
+validação de request por JSON Schema e CORS.
+
+A aplicação **só aceita requisição vinda do gateway** ([ADR-017](docs/adr/ADR-017-acesso-a-aplicacao-apenas-pelo-gateway.md)):
+o gateway injeta `x-origem-gateway` em todas as integrações e a aplicação recusa com `403` quem
+não o traz, exceto nos caminhos de plataforma usados pelos probes. O NodePort, por sua vez,
+aceita tráfego apenas do security group do NLB.
+
+O link de aprovação de orçamento enviado por e-mail aponta para o gateway, não para a
+aplicação: `SERVICETRACK_API_BASE_URL` vem de `/servicetrack/<env>/api/base-url` no SSM, que
+recebe o domínio customizado quando existe e o endpoint `execute-api` caso contrário. Em PRD
+com domínio o link é estável; em HML ele muda a cada recriação do ambiente. A validação do JWT fica no backend
 por padrão, e opcionalmente também na borda (`enable_jwt_authorizer`). O endpoint
 pode ser publicado em domínio próprio com base path `/service-track/v1`
 (`custom_domain`).

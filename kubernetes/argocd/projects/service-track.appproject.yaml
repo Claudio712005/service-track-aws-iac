@@ -58,6 +58,8 @@ spec:
       - kind: Secret
         name: service-track-jwt
       - kind: Secret
+        name: service-track-gateway
+      - kind: Secret
         name: db-init-creds
       - kind: ConfigMap
         name: service-track-runtime
