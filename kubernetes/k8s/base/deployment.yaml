@@ -29,6 +29,17 @@ spec:
           image: servicetrack-api:latest
           ports:
             - containerPort: 8080
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://$(HOST_IP):4317
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: http://$(HOST_IP):4318/v1/metrics
+            - name: OTEL_SERVICE_NAME
+              value: service-track-api
           envFrom:
             - configMapRef:
                 name: service-track-config

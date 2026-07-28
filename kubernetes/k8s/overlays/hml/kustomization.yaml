@@ -15,6 +15,7 @@ images:
 configMapGenerator:
 - literals:
   - QUARKUS_PROFILE=prod
+  - OTEL_ENVIRONMENT=hml
   - QUARKUS_MAILER_FROM=no-reply@clausilva.com.br
   - MP_JWT_VERIFY_PUBLICKEY_LOCATION=file:/keys/publicKey.pem
   - SMALLRYE_JWT_SIGN_KEY_LOCATION=file:/keys/privateKey.pem

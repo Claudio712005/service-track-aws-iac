@@ -28,6 +28,7 @@ configMapGenerator:
   - name: service-track-config
     literals:
       - QUARKUS_PROFILE=prod
+      - OTEL_ENVIRONMENT=local
       - DB_JDBC_URL=jdbc:postgresql://service-track-postgres:5432/servicetrack
       - SERVICETRACK_API_BASE_URL=http://localhost:8080
       - QUARKUS_MAILER_FROM=no-reply@clausilva.com.br
