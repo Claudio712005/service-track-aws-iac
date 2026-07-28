@@ -137,6 +137,49 @@ module "app_secrets" {
   tags        = local.tags
 }
 
+module "datadog_agent" {
+  count  = var.observabilidade.habilitada ? 1 : 0
+  source = "../datadog-agent"
+
+  name        = local.name
+  environment = var.environment
+
+  api_key = var.observabilidade.api_key
+  app_key = var.observabilidade.app_key
+  site    = var.observabilidade.site
+
+  cluster_name = module.eks.cluster_name
+
+  cluster_agent_replicas = var.observabilidade.cluster_agent_replicas
+  espalhar_por_az        = var.observabilidade.espalhar_por_az
+  coletar_logs           = var.observabilidade.coletar_logs
+  coletar_traces         = var.observabilidade.coletar_traces
+
+  recursos_node_agent    = var.observabilidade.recursos_node_agent
+  recursos_cluster_agent = var.observabilidade.recursos_cluster_agent
+
+  depends_on_node_group = module.eks.node_group
+}
+
+module "observability" {
+  count  = var.observabilidade.habilitada && var.observabilidade.app_key != "" ? 1 : 0
+  source = "../observability"
+
+  environment  = var.environment
+  notificacao  = var.observabilidade.notificacao
+  tags_monitor = ["env:${var.environment}", "projeto:servicetrack", "gerenciado:terraform"]
+
+  limite_latencia_p95_segundos = var.observabilidade.limite_latencia_p95_segundos
+  limite_erros_5xx             = var.observabilidade.limite_erros_5xx
+  limite_falhas_os             = var.observabilidade.limite_falhas_os
+  limite_falhas_integracao     = var.observabilidade.limite_falhas_integracao
+  minimo_de_pods               = var.observabilidade.minimo_de_pods
+  limite_saturacao             = var.observabilidade.limite_saturacao
+  limite_uso_de_conexoes       = var.observabilidade.limite_uso_de_conexoes
+
+  depends_on = [module.datadog_agent]
+}
+
 resource "aws_ssm_parameter" "gateway_shared_secret" {
   name  = "/${var.project}/${var.environment}/gateway/shared-secret"
   type  = "SecureString"

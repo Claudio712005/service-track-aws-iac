@@ -179,3 +179,68 @@ variable "gateway_shared_secret" {
   sensitive   = true
   default     = null
 }
+
+variable "observabilidade" {
+  description = "Configuracao do Datadog por ambiente. Desabilitada nao instala agente nem cria monitores."
+  type = object({
+    habilitada             = bool
+    api_key                = string
+    app_key                = string
+    site                   = string
+    notificacao            = string
+    cluster_agent_replicas = number
+    espalhar_por_az        = bool
+    coletar_logs           = bool
+    coletar_traces         = bool
+    recursos_node_agent = object({
+      requests_cpu    = string
+      requests_memory = string
+      limits_cpu      = string
+      limits_memory   = string
+    })
+    recursos_cluster_agent = object({
+      requests_cpu    = string
+      requests_memory = string
+      limits_cpu      = string
+      limits_memory   = string
+    })
+    limite_latencia_p95_segundos = number
+    limite_erros_5xx             = number
+    limite_falhas_os             = number
+    limite_falhas_integracao     = number
+    minimo_de_pods               = number
+    limite_saturacao             = number
+    limite_uso_de_conexoes       = number
+  })
+  sensitive = true
+  default = {
+    habilitada             = false
+    api_key                = ""
+    app_key                = ""
+    site                   = "datadoghq.com"
+    notificacao            = ""
+    cluster_agent_replicas = 1
+    espalhar_por_az        = false
+    coletar_logs           = false
+    coletar_traces         = false
+    recursos_node_agent = {
+      requests_cpu    = "100m"
+      requests_memory = "256Mi"
+      limits_cpu      = "500m"
+      limits_memory   = "512Mi"
+    }
+    recursos_cluster_agent = {
+      requests_cpu    = "100m"
+      requests_memory = "128Mi"
+      limits_cpu      = "300m"
+      limits_memory   = "256Mi"
+    }
+    limite_latencia_p95_segundos = 2
+    limite_erros_5xx             = 20
+    limite_falhas_os             = 10
+    limite_falhas_integracao     = 20
+    minimo_de_pods               = 1
+    limite_saturacao             = 0.85
+    limite_uso_de_conexoes       = 0.8
+  }
+}

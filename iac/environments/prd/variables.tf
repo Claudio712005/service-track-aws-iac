@@ -67,3 +67,28 @@ variable "app_secret_params" {
   default   = {}
   sensitive = true
 }
+
+variable "datadog_api_key" {
+  description = "Datadog API key. Vazia desliga a observabilidade do ambiente."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "datadog_app_key" {
+  description = "Datadog application key. Necessaria para criar dashboards e monitores."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "datadog_site" {
+  type    = string
+  default = "datadoghq.com"
+}
+
+variable "datadog_notificacao" {
+  description = "Destino dos alertas no formato do Datadog, por exemplo @slack-canal."
+  type        = string
+  default     = ""
+}
