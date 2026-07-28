@@ -124,6 +124,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.env }}
+    env:
+      TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
+      TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -205,6 +208,9 @@ jobs:
     environment:
       name: ${{ inputs.env }}
       url: ${{ steps.outputs.outputs.api_url }}
+    env:
+      TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
+      TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -407,6 +413,9 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.env }}
+    env:
+      TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
+      TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
     steps:
       - uses: actions/checkout@v4
 
