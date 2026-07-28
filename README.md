@@ -151,6 +151,8 @@ Esta é a lista completa do que precisa existir e como criar.
 | `IAC_REPO_TOKEN` | GitHub → **repo da API** → Secrets | uma vez | PAT fino / GitHub App, `contents: write` só neste repo |
 | `lambda_extra_env` (`MP_JWT_VERIFY_PUBLICKEY`, `SMALLRYE_JWT_SIGN_KEY`) | variável Terraform (tfvars / `TF_VAR`) | por ambiente | `openssl` (par RS256) |
 | `app_secret_params` (`service-track-secret`, `db-init-creds`, `jwt-private`, `jwt-public`) | variável Terraform → SSM → secret do k8s | por ambiente | `openssl` + compor dotenv |
+| `DD_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → API Keys |
+| `DD_APP_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → Application Keys |
 
 O material sensível entra como **variável Terraform** e é reaplicado a cada
 recriação — guarde num `terraform.tfvars` local (gitignored) ou em `TF_VAR_*`.
@@ -243,6 +245,77 @@ mas os pods ficam sem os segredos até você fornecê-los.
 `scripts/gen-local-jwt-keys.sh` gera as chaves; o overlay `local` cria os demais
 secrets com valores placeholder. Ver
 [kubernetes/README.md](kubernetes/README.md).
+
+## Observabilidade
+
+Datadog em `hml` e `prd`, provisionado por Terraform. O agente entra no cluster por Helm e os
+dashboards e monitores são recursos Terraform — nada é criado pela interface do Datadog, para
+que sobrevivam à recriação do ambiente.
+
+### Duas chaves, dois papéis
+
+| Secret | Para quê | Sem ela |
+|---|---|---|
+| `DD_API_KEY` | ingestão de métricas, traces e logs pelo agente | a observabilidade fica **desligada** no ambiente inteiro |
+| `DD_APP_KEY` | criar dashboards e monitores pela API do Datadog | o agente sobe e coleta, mas nenhum alerta ou dashboard é criado |
+
+Ambas vão em **Settings → Secrets and variables → Actions → Secrets**, nos environments `hml`
+e `prd`. `DD_API_KEY` vazia desliga a observabilidade sem quebrar o apply — é o que permite
+subir um ambiente sem Datadog quando o orçamento aperta.
+
+### O que sobe no cluster
+
+| Componente | Forma | Por quê |
+|---|---|---|
+| Node agent | DaemonSet | um por node; coleta métricas, logs e recebe OTLP na porta do host |
+| Cluster agent | Deployment | metadados de cluster, `kubernetes_state`, evita que cada node consulte a API do Kubernetes |
+
+A aplicação envia OTLP para o **agente do próprio node**, via `status.hostIP`. Não há serviço
+intermediário: manter a coleta local ao node preserva a correlação entre o trace e o host que
+o gerou.
+
+### Diferenças entre ambientes
+
+| | hml | prd |
+|---|---|---|
+| Réplicas do cluster agent | 1 | **2** |
+| Espalhadas por AZ | não | **sim** |
+| Recursos do node agent | 100m / 256Mi | 200m / 512Mi |
+| Latência p95 que alerta | 3 s | 1,5 s |
+| Erros 5xx em 5 min | 20 | 10 |
+| Falhas de OS em 15 min | 10 | 5 |
+| Mínimo de pods prontos | 1 | 2 |
+| Saturação de CPU | 90% | 80% |
+
+Sobre **duas AZ**: o node agent é DaemonSet, então já cobre todas as zonas onde existem nodes
+— não há decisão a tomar. A pergunta só se aplica ao **cluster agent**, que é um Deployment.
+Em PRD são duas réplicas com anti-afinidade por `topology.kubernetes.io/zone`. Em HML o node
+group tem **um node**, então duas réplicas não teriam onde espalhar e a segunda ficaria
+pendente — por isso uma só.
+
+Vale lembrar que o Datadog é SaaS: perder o cluster agent não perde dado de aplicação, porque
+os node agents seguem enviando. O que para é a coleta de metadados do cluster. A alta
+disponibilidade dele é conforto operacional, não durabilidade.
+
+### Monitores criados
+
+| Monitor | Dispara quando |
+|---|---|
+| Latência alta na API | p95 acima do limite por 10 min |
+| Taxa de erro 5xx | respostas 5xx acima do limite em 5 min |
+| **Falha no processamento de ordens de serviço** | erros no domínio de OS em 15 min |
+| Pods indisponíveis | réplicas prontas abaixo do mínimo, ou sem dado por 20 min |
+| Saturação de CPU nos nodes | uso acima do limite por 10 min |
+| Falhas nas integrações externas | erros de rest-client em 15 min |
+| Banco próximo do teto de conexões | uso acima do limite do orçamento declarado no repositório de banco |
+
+O dashboard traz volume diário de OS, tempo médio por status, latência por rota, erros de
+integração, CPU e memória dos pods, réplicas do HPA, conexões do banco e uptime.
+
+> As métricas de negócio (`servicetrack.ordem_servico.*`) dependem de instrumentação na
+> aplicação. Os widgets existem e ficam vazios até ela ser adicionada.
+
+---
 
 ## Repositório da API (CD da imagem)
 
