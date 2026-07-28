@@ -172,3 +172,10 @@ variable "state_bucket" {
   type        = string
   default     = "servicetrack-tfstate-123124496645"
 }
+
+variable "gateway_shared_secret" {
+  description = "Segredo do header x-origem-gateway. Vazio gera um automaticamente por ambiente."
+  type        = string
+  sensitive   = true
+  default     = null
+}
