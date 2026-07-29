@@ -3,6 +3,11 @@ resource "random_password" "gateway_shared_secret" {
   special = false
 }
 
+resource "tls_private_key" "jwt" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
 locals {
   gateway_shared_secret = coalesce(var.gateway_shared_secret, random_password.gateway_shared_secret.result)
 
@@ -22,9 +27,17 @@ locals {
 
   # A chave publica ja e entregue a Lambda de autenticacao por lambda_extra_env;
   # o authorizer reusa a mesma, sem novo segredo.
-  jwt_public_key = coalesce(
-    var.jwt_public_key,
-    lookup(var.lambda_extra_env, "MP_JWT_VERIFY_PUBLICKEY", ""),
+  jwt_private_key_pem = tls_private_key.jwt.private_key_pem_pkcs8
+  jwt_public_key_pem  = tls_private_key.jwt.public_key_pem
+
+  jwt_public_key = coalesce(var.jwt_public_key, local.jwt_public_key_pem)
+
+  lambda_env = merge(
+    {
+      MP_JWT_VERIFY_PUBLICKEY = local.jwt_public_key_pem
+      SMALLRYE_JWT_SIGN_KEY   = local.jwt_private_key_pem
+    },
+    var.lambda_extra_env,
   )
 }
 
@@ -132,9 +145,18 @@ locals {
 module "app_secrets" {
   source = "../app-secrets"
 
-  name_prefix = "/servicetrack/${var.environment}"
-  params      = var.app_secret_params
+  name_prefix = "/${var.project}/${var.environment}"
   tags        = local.tags
+
+  params = merge(
+    {
+      "jwt-private"         = local.jwt_private_key_pem
+      "jwt-public"          = local.jwt_public_key_pem
+      "unsplash-access-key" = var.unsplash_access_key
+      "resend-api-key"      = var.resend_api_key
+    },
+    var.app_secret_params,
+  )
 }
 
 module "datadog_agent" {
@@ -268,7 +290,7 @@ module "lambda_auth" {
 
   jwt_issuer             = var.jwt_issuer
   jwt_expiration_seconds = var.jwt_expiration_seconds
-  extra_env              = var.lambda_extra_env
+  extra_env              = local.lambda_env
 }
 
 resource "aws_security_group_rule" "rds_from_eks" {

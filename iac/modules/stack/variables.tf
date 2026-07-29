@@ -244,3 +244,17 @@ variable "observabilidade" {
     limite_uso_de_conexoes       = 0.8
   }
 }
+
+variable "unsplash_access_key" {
+  description = "Chave da API do Unsplash. Segredo de terceiro, entregue pela esteira."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "resend_api_key" {
+  description = "Chave da API do Resend, usada no envio de e-mail. Segredo de terceiro."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
