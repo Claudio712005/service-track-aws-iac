@@ -29,15 +29,49 @@ apply_secret() {
   echo ">> secret $1 aplicado"
 }
 
-if v="$(fetch service-track-secret)"; then
-  printf '%s' "$v" > "$WORKDIR/app.env"
-  apply_secret service-track-secret --from-env-file="$WORKDIR/app.env"
+apply_configmap() {
+  kubectl create configmap "$1" -n "$NAMESPACE" "${@:2}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  echo ">> configmap $1 aplicado"
+}
+
+DB_MASTER_USER="$(fetch db/username || true)"
+DB_MASTER_PASS="$(fetch db/password || true)"
+DB_NOME="$(fetch db/name || true)"
+APP_USER="$(fetch db/roles/app/usuario || true)"
+APP_PASS="$(fetch db/roles/app/senha || true)"
+FLYWAY_USER="$(fetch db/roles/flyway/usuario || true)"
+FLYWAY_PASS="$(fetch db/roles/flyway/senha || true)"
+
+if [ -z "$APP_PASS" ] || [ -z "$FLYWAY_PASS" ]; then
+  echo "!! credenciais de role ausentes em $PREFIX/db/roles/" >&2
+  echo "!! aplique antes o repositorio service-track-db-infra para este ambiente" >&2
+  exit 1
 fi
 
-if v="$(fetch db-init-creds)"; then
-  printf '%s' "$v" > "$WORKDIR/db.env"
-  apply_secret db-init-creds --from-env-file="$WORKDIR/db.env"
-fi
+UNSPLASH="$(fetch unsplash-access-key || true)"
+RESEND="$(fetch resend-api-key || true)"
+
+cat > "$WORKDIR/app.env" <<EOF
+APP_DB_USER=$APP_USER
+APP_DB_PASSWORD=$APP_PASS
+FLYWAY_DB_USER=$FLYWAY_USER
+FLYWAY_DB_PASSWORD=$FLYWAY_PASS
+UNSPLASH_CHAVE_ACESSO=$UNSPLASH
+RESEND_API_KEY=$RESEND
+EOF
+apply_secret service-track-secret --from-env-file="$WORKDIR/app.env"
+
+cat > "$WORKDIR/db-init.env" <<EOF
+POSTGRES_USER=$DB_MASTER_USER
+POSTGRES_PASSWORD=$DB_MASTER_PASS
+POSTGRES_DB=$DB_NOME
+APP_DB_USER=$APP_USER
+APP_DB_PASSWORD=$APP_PASS
+FLYWAY_DB_USER=$FLYWAY_USER
+FLYWAY_DB_PASSWORD=$FLYWAY_PASS
+EOF
+apply_secret db-init-creds --from-env-file="$WORKDIR/db-init.env"
 
 priv="$(fetch jwt-private || true)"
 pub="$(fetch jwt-public || true)"
@@ -47,45 +81,33 @@ if [ -n "$priv" ] && [ -n "$pub" ]; then
   apply_secret service-track-jwt \
     --from-file=privateKey.pem="$WORKDIR/privateKey.pem" \
     --from-file=publicKey.pem="$WORKDIR/publicKey.pem"
+else
+  echo "!! par RS256 ausente em $PREFIX/jwt-: a aplicacao nao validara token" >&2
 fi
 
-# Configuracao de banco e orcamento de pool vem do repositorio service-track-db-infra,
-# publicados no SSM. Materializados aqui como ConfigMap para que a aplicacao os
-# consuma sem que o numero seja repetido em dois repositorios.
 JDBC="$(fetch db/jdbc-url || true)"
 POOL_API="$(fetch db/pool/api-max-size || true)"
 POOL_MIG="$(fetch db/pool/api-migration-max-size || true)"
 
 if [ -n "$JDBC" ]; then
-  kubectl create configmap service-track-db -n "$NAMESPACE" \
+  apply_configmap service-track-db \
     --from-literal=DB_JDBC_URL="$JDBC" \
     --from-literal=DB_POOL_MAX_SIZE="${POOL_API:-8}" \
-    --from-literal=DB_POOL_MIGRATION_MAX_SIZE="${POOL_MIG:-2}" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  echo ">> configmap service-track-db aplicado (pool: ${POOL_API:-8} + ${POOL_MIG:-2} por pod)"
-else
-  echo "!! $PREFIX/db/jdbc-url ausente: aplique primeiro o repositorio service-track-db-infra" >&2
+    --from-literal=DB_POOL_MIGRATION_MAX_SIZE="${POOL_MIG:-2}"
 fi
 
 BASE_URL="$(fetch api/base-url || true)"
-SEGREDO="$(fetch gateway/shared-secret || true)"
-
 if [ -n "$BASE_URL" ]; then
-  kubectl create configmap service-track-runtime -n "$NAMESPACE" \
-    --from-literal=SERVICETRACK_API_BASE_URL="$BASE_URL" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  echo ">> configmap service-track-runtime aplicado (base-url: $BASE_URL)"
+  apply_configmap service-track-runtime --from-literal=SERVICETRACK_API_BASE_URL="$BASE_URL"
 else
   echo "!! $PREFIX/api/base-url ausente: os links de aprovacao por e-mail ficarao invalidos" >&2
 fi
 
+SEGREDO="$(fetch gateway/shared-secret || true)"
 if [ -n "$SEGREDO" ]; then
-  kubectl create secret generic service-track-gateway -n "$NAMESPACE" \
-    --from-literal=SERVICETRACK_GATEWAY_SEGREDO="$SEGREDO" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  echo ">> secret service-track-gateway aplicado"
+  apply_secret service-track-gateway --from-literal=SERVICETRACK_GATEWAY_SEGREDO="$SEGREDO"
 else
   echo "!! $PREFIX/gateway/shared-secret ausente: a aplicacao aceitara requisicao fora do gateway" >&2
 fi
 
-echo ">> secrets sincronizados do SSM ($PREFIX)"
+echo ">> configuracao sincronizada do SSM ($PREFIX)"
