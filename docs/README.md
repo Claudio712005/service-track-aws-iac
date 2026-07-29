@@ -21,6 +21,7 @@
 | [015](adr/ADR-015-cd-imagem-por-ambiente.md) | CD por bump de imagem, repositório ECR por ambiente |
 | [016](adr/ADR-016-seguranca-supply-chain.md) | Segurança da cadeia de entrega da imagem |
 | [017](adr/ADR-017-acesso-a-aplicacao-apenas-pelo-gateway.md) | Acesso à aplicação apenas pelo API Gateway |
+| [018](adr/ADR-018-segredos-gerados-no-apply.md) | Segredos gerados no apply, não colados em secrets |
 
 ## RFC
 

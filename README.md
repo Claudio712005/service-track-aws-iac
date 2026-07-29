@@ -149,16 +149,24 @@ Esta é a lista completa do que precisa existir e como criar.
 |---|---|---|---|
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | GitHub → **este repo** → Environments `hml` e `prd` | a cada laboratório | AWS Academy → AWS Details → AWS CLI |
 | `IAC_REPO_TOKEN` | GitHub → **repo da API** → Secrets | uma vez | PAT fino / GitHub App, `contents: write` só neste repo |
-| `lambda_extra_env` (`MP_JWT_VERIFY_PUBLICKEY`, `SMALLRYE_JWT_SIGN_KEY`) | variável Terraform (tfvars / `TF_VAR`) | por ambiente | `openssl` (par RS256) |
-| `app_secret_params` (`service-track-secret`, `db-init-creds`, `jwt-private`, `jwt-public`) | variável Terraform → SSM → secret do k8s | por ambiente | `openssl` + compor dotenv |
+| `UNSPLASH_ACCESS_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Unsplash |
+| `RESEND_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Resend |
 | `DD_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → API Keys |
 | `DD_APP_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → Application Keys |
 
-O material sensível entra como **variável Terraform** e é reaplicado a cada
-recriação — guarde num `terraform.tfvars` local (gitignored) ou em `TF_VAR_*`.
-A esteira Terraform transporta apenas as credenciais AWS, a tag da imagem e o
-domínio; os segredos são fornecidos no `apply` (local, ou adicionando os
-`TF_VAR_*` ao job).
+**Segredo que pode ser gerado é gerado no apply** ([ADR-018](docs/adr/ADR-018-segredos-gerados-no-apply.md)).
+Só permanecem como secret do GitHub os que vêm de terceiro.
+
+| Segredo | Origem |
+|---|---|
+| Par RS256 do JWT | `tls_private_key` no apply, alimentando Lambda e aplicação de uma vez |
+| Segredo do header do gateway | gerado no apply |
+| Senhas de `app_user`, `flyway_user`, `readonly_user` | geradas em `service-track-db-infra`, lidas do SSM |
+| Chaves do Unsplash e do Resend | secrets do GitHub, entregues por `TF_VAR_*` |
+
+Nada disso precisa ser colado à mão a cada recriação. O bootstrap **compõe** os secrets do
+Kubernetes lendo do SSM, e falha com mensagem explícita se o repositório de banco não tiver
+sido aplicado antes.
 
 ### 1. Credenciais AWS (esteiras)
 
@@ -179,20 +187,13 @@ Se vazar, o dano máximo é um commit de bump (revertível) — não dá acesso 
 
 ### 3. Chaves JWT (RS256)
 
-Um par assina/verifica o JWT. Gere com:
+**Não precisa gerar nada.** O par é criado pelo Terraform a cada apply e entregue aos dois
+consumidores na mesma execução — a Lambda por variável de ambiente, a aplicação por secret do
+Kubernetes. Isso elimina a chance de os dois lados receberem pares diferentes, que produzia
+token emitido com sucesso e recusado pelo backend.
 
-```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out privateKey.pem
-openssl rsa -in privateKey.pem -pubout -out publicKey.pem
-```
-
-O mesmo par abastece dois consumidores:
-
-- **Lambda de autenticação** — via `lambda_extra_env` (ver
-  [Configuração da Lambda](#configuração-da-lambda-de-autenticação)):
-  `MP_JWT_VERIFY_PUBLICKEY` = conteúdo de `publicKey.pem`,
-  `SMALLRYE_JWT_SIGN_KEY` = conteúdo de `privateKey.pem`.
-- **Aplicação no EKS** — via `app_secret_params` (`jwt-private` / `jwt-public`).
+Recriar o ambiente troca o par e invalida os tokens em circulação. É o comportamento esperado
+num ambiente descartável.
 
 ### 4. Segredos da aplicação (`app_secret_params`)
 
