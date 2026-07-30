@@ -52,18 +52,18 @@ resource "datadog_monitor" "erros_5xx" {
 
 resource "datadog_monitor" "falha_no_processamento_de_os" {
   name = "[${local.sufixo}] Falha no processamento de ordens de servico"
-  type = "log alert"
+  type = "query alert"
 
   message = <<-EOT
     Erros no processamento de ordens de servico nos ultimos 15 minutos.
 
-    Investigar pelo trace correlacionado: o log estruturado carrega traceId e
-    spanId da requisicao que falhou.
+    A metrica vem do interceptor de casos de uso. Para achar a causa, filtre os
+    logs por erro_codigo comecando em OS_ e siga o traceId da linha.
 
     ${var.notificacao}
   EOT
 
-  query = "logs(\"service:service-track-api env:${var.environment} status:error @logger_name:*ordemServico*\").index(\"*\").rollup(\"count\").last(\"15m\") > ${var.limite_falhas_os}"
+  query = "sum(last_15m):sum:servicetrack.usecase.execucoes{entidade:ordem_servico,resultado:erro,${local.escopo}}.as_count() > ${var.limite_falhas_os}"
 
   monitor_thresholds {
     critical = var.limite_falhas_os
@@ -136,7 +136,7 @@ resource "datadog_monitor" "erros_de_integracao" {
     ${var.notificacao}
   EOT
 
-  query = "logs(\"service:service-track-api env:${var.environment} status:error @logger_name:*rest-client*\").index(\"*\").rollup(\"count\").last(\"15m\") > ${var.limite_falhas_integracao}"
+  query = "logs(\"service:service-track-api env:${var.environment} @erro_tipo:IntegracaoExternaException\").index(\"*\").rollup(\"count\").last(\"15m\") > ${var.limite_falhas_integracao}"
 
   monitor_thresholds {
     critical = var.limite_falhas_integracao
@@ -182,17 +182,21 @@ resource "datadog_dashboard" "servicetrack" {
       title = "Volume diario de ordens de servico"
 
       request {
-        q = "sum:servicetrack.ordem_servico.criadas{${local.escopo}}.as_count()"
+        q = "sum:servicetrack.usecase.execucoes{use_case:os_criar,resultado:sucesso,${local.escopo}}.as_count()"
+      }
+
+      request {
+        q = "sum:servicetrack.usecase.execucoes{use_case:os_criar_completa,resultado:sucesso,${local.escopo}}.as_count()"
       }
     }
   }
 
   widget {
     timeseries_definition {
-      title = "Tempo medio de execucao por status"
+      title = "Tempo medio das transicoes de status da ordem de servico"
 
       request {
-        q = "avg:servicetrack.ordem_servico.tempo_por_status{${local.escopo}} by {status}"
+        q = "avg:servicetrack.usecase.duracao{entidade:ordem_servico,resultado:sucesso,${local.escopo}} by {use_case}"
       }
     }
   }
@@ -209,10 +213,20 @@ resource "datadog_dashboard" "servicetrack" {
 
   widget {
     timeseries_definition {
-      title = "Erros e falhas nas integracoes"
+      title = "Casos de uso mais lentos"
 
       request {
-        q = "sum:trace.http.client.request.errors{${local.escopo}} by {http.host}.as_count()"
+        q = "avg:servicetrack.usecase.duracao{resultado:sucesso,${local.escopo}} by {use_case}"
+      }
+    }
+  }
+
+  widget {
+    timeseries_definition {
+      title = "Casos de uso com falha, por entidade"
+
+      request {
+        q = "sum:servicetrack.usecase.execucoes{resultado:erro,${local.escopo}} by {entidade}.as_count()"
       }
     }
   }
