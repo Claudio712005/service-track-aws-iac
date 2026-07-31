@@ -22,10 +22,34 @@
 | [016](adr/ADR-016-seguranca-supply-chain.md) | Segurança da cadeia de entrega da imagem |
 | [017](adr/ADR-017-acesso-a-aplicacao-apenas-pelo-gateway.md) | Acesso à aplicação apenas pelo API Gateway |
 | [018](adr/ADR-018-segredos-gerados-no-apply.md) | Segredos gerados no apply, não colados em secrets |
+| [019](adr/ADR-019-kubernetes-eks.md) | Orquestração com Kubernetes no Amazon EKS |
+| [020](adr/ADR-020-terraform-iac.md) | Infraestrutura como código com Terraform |
+| [021](adr/ADR-021-gitops-argocd.md) | Deploy contínuo GitOps com ArgoCD |
+| [022](adr/ADR-022-bootstrap-scripts-operacionais.md) | Bootstrap de segredos e scripts operacionais |
+
+`019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
+`API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura
+(`GLOBAL-RFC-006`). O conteúdo é o original; mudou a numeração, que colidia com `015` a `018`
+deste repositório.
 
 ## RFC
 
 - [RFC-001](rfc/RFC-001-arquitetura-de-exposicao-da-api.md) — arquitetura de exposição da API
+- [RFC-002](rfc/RFC-002-kubernetes-eks.md) — Kubernetes no EKS
+- [RFC-003](rfc/RFC-003-terraform-iac.md) — infraestrutura como código com Terraform
+- [RFC-004](rfc/RFC-004-gitops-argocd.md) — GitOps com ArgoCD
+- [RFC-005](rfc/RFC-005-bootstrap-scripts-operacionais.md) — bootstrap de segredos
+
+## Diagramas
+
+- [diagramas/rede.md](diagramas/rede.md) — topologia de VPC, subnets, NAT e o caminho do
+  tráfego até o pod
+- [diagramas/deployment.md](diagramas/deployment.md) — mapeamento software → nó de execução,
+  fluxo de imagem e de segredos
+
+Ambos descrevem o estado da Fase 3. Os desenhos equivalentes da Fase 2 estão em
+`service-track-api/docs/mvp-2/infra-fase-2/` e descrevem o cluster `servicetrack-dev`, que não
+existe mais.
 
 ## Guias
 
