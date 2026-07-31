@@ -26,6 +26,9 @@
 | [020](adr/ADR-020-terraform-iac.md) | Infraestrutura como código com Terraform |
 | [021](adr/ADR-021-gitops-argocd.md) | Deploy contínuo GitOps com ArgoCD |
 | [022](adr/ADR-022-bootstrap-scripts-operacionais.md) | Bootstrap de segredos e scripts operacionais |
+| [023](adr/ADR-023-dimensionamento-de-compute-por-ambiente.md) | Dimensionamento de compute por ambiente, e por que HML não tem HPA |
+| [024](adr/ADR-024-topologia-de-rede-e-tabelas-de-rota.md) | Topologia de rede, tabelas de rota e saída para a internet |
+| [025](adr/ADR-025-regras-de-security-group.md) | Regras de security group e a fronteira entre states |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura
@@ -39,6 +42,9 @@ deste repositório.
 - [RFC-003](rfc/RFC-003-terraform-iac.md) — infraestrutura como código com Terraform
 - [RFC-004](rfc/RFC-004-gitops-argocd.md) — GitOps com ArgoCD
 - [RFC-005](rfc/RFC-005-bootstrap-scripts-operacionais.md) — bootstrap de segredos
+- [RFC-006](rfc/RFC-006-dimensionamento-de-compute.md) — dimensionamento de compute por ambiente
+- [RFC-007](rfc/RFC-007-topologia-de-rede.md) — topologia de rede, rotas e saída para a internet
+- [RFC-008](rfc/RFC-008-regras-de-security-group.md) — regras de security group
 
 ## Diagramas
 

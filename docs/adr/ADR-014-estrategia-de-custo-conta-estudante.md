@@ -10,6 +10,11 @@ pode ser esgotado. O time **não deixa a AWS ligada a semana inteira** — os
 ambientes são criados para testes/apresentações e destruídos em seguida. As
 decisões de custo partem dessa premissa, não de um ambiente 24×7.
 
+> O custo do node group e do NAT está detalhado por ambiente em
+> [ADR-023](ADR-023-dimensionamento-de-compute-por-ambiente.md) e
+> [ADR-024](ADR-024-topologia-de-rede-e-tabelas-de-rota.md), junto com a aritmética que
+> justifica cada tamanho. O do banco está em `DB-ADR-006`.
+
 ## Custos fixos relevantes
 
 Por ambiente, com tudo ligado:
