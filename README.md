@@ -33,20 +33,24 @@ iac/
     network/       VPC, subnets publicas/privadas, IGW, NAT, rotas
     eks/           Cluster EKS + node group
     addons/        ArgoCD e metrics-server (Helm)
+    app-secrets/   Bootstrap dos secrets e configmaps a partir do SSM
     ecr/           Repositorio de imagem (reutilizavel)
     lambda/        Lambda de autenticacao (imagem de container) + SG + logs
     lambda-authorizer/ Authorizer de JWT na borda (Go, provided.al2023) + testes
     vpc-link/      NLB interno + VPC Link (API Gateway -> EKS)
     api-gateway/   REST API a partir do openApi.yaml, usage plans, API keys,
                    CORS, dominio customizado
+    datadog-agent/ Node agent e cluster agent via Helm (hml e prd)
+    observability/ Monitores e dashboard do Datadog
     stack/         Composicao que liga todos os modulos acima
   environments/
-    hml/           Homologacao (t3.small / db.t3.micro) - state key servicetrack/hml
-    prd/           Producao   (t3.large / db.t3.medium) - state key servicetrack/prd
+    hml/           Homologacao (node t3.small) - state key servicetrack/hml
+    prd/           Producao   (node t3.large) - state key servicetrack/prd
 
 docs/
-  adr/             Decisoes arquiteturais (ADR-001 a ADR-010)
-  rfc/             RFC-001: arquitetura de exposicao da API
+  adr/             Decisoes arquiteturais (ADR-001 a ADR-025)
+  rfc/             RFC-001 a RFC-008
+  diagramas/       Topologia de rede e diagrama de deployment (Mermaid)
   api-gateway/     Guia tecnico e operacional do gateway
 
 .github/workflows/

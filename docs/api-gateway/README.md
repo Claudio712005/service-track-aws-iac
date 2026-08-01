@@ -137,7 +137,7 @@ KEY=$(terraform output -json api_key_values | jq -r .web)
 TOKEN=$(curl -s -X POST "$BASE/autenticacao" \
   -H "x-api-key: $KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"email":"claudio@email.com","senha":"Senha@123"}' | jq -r .token)
+  -d '{"cpf":"12345678901","senha":"Senha@123"}' | jq -r .token)
 
 # 2. Rota autenticada (EKS via VPC Link)
 curl -s "$BASE/clientes/550e8400-e29b-41d4-a716-446655440000" \
