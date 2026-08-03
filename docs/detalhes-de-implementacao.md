@@ -1,0 +1,152 @@
+# Detalhes de implementação
+
+Fatos não óbvios do Terraform e dos scripts deste repositório: por que um atributo tem aquele
+valor, e o que quebra ao mudá-lo.
+
+**O porquê das decisões está nos ADRs.** Aqui fica só a mecânica que não cabe numa decisão
+arquitetural mas que custa caro descobrir de novo. Este arquivo existe porque o código não
+leva comentários; ao alterar um módulo, atualizar a seção correspondente.
+
+---
+
+## `modules/vpc-link`
+
+**`enable_cross_zone_load_balancing = true`.** Os nodes podem estar concentrados em uma AZ só
+— em HML o node group tem `desired_size = 1`. Sem cross-zone, o nó do NLB na outra AZ fica sem
+alvo e metade das requisições morre. Ver [ADR-023](adr/ADR-023-dimensionamento-de-compute-por-ambiente.md).
+
+**`preserve_client_ip` desligado.** Faz a origem do tráfego no node ser o NLB, não o cliente
+original. É o que permite restringir o NodePort ao security group do NLB em vez de liberar a
+VPC inteira. Nada se perde: o IP real do usuário chega pelo `X-Forwarded-For` do API Gateway.
+Ver [ADR-025](adr/ADR-025-regras-de-security-group.md).
+
+**`deregistration_delay` curto.** Sem isso o target group segura os nodes por 300 s e o
+`terraform destroy` arrasta. Importa porque destruir é rotina aqui.
+
+**O NLB é criado pelo Terraform, não pelo Kubernetes.** O VPC Link precisa do ARN do load
+balancer em tempo de apply. Um `Service type=LoadBalancer` só existiria depois do ArgoCD
+sincronizar, e o Terraform não teria como referenciá-lo. Ver
+[ADR-003](adr/ADR-003-integracao-backend-eks-vpc-link.md).
+
+**O ASG do node group é registrado no target group**, então nodes que entram e saem por
+autoscaling são registrados automaticamente.
+
+---
+
+## `modules/api-gateway`
+
+**Esquema de segurança com o authorizer desligado.** Vira um `http/bearer` que o API Gateway
+ignora — existe apenas no contrato. Ligado, vira o authorizer custom aplicado a toda operação
+que referencia `bearerAuth`; rotas com `security: []` seguem abertas. Ver
+[ADR-007](adr/ADR-007-lambda-authorizer-opcional.md).
+
+**A permissão de invocação do authorizer usa wildcard.** O authorizer é criado pela importação
+do OpenAPI, então não existe recurso Terraform para referenciar no `source_arn`.
+
+**Usage plan dedicado por consumidor.** Quem declara `throttle` ou `quota` próprios ganha um
+plano só seu; os demais compartilham o plano do ambiente.
+
+**A hosted zone pode vir por ID ou por nome.** Por nome evita carregar o ID em `tfvars` (que é
+gitignored) ou em secret de pipeline.
+
+**WAF.** Regra rate-based por IP de origem: acima do limite em janela de 5 min, o IP é
+bloqueado até cair abaixo. Escopo `REGIONAL`, associado ao stage do REST API. Complementa o
+usage plan, que limita por API key — o WAF barra flood distribuído e anônimo antes de gastar a
+Lambda ou o backend. Ligado só onde o config declara `waf.enabled`, hoje apenas PRD. Ver
+[ADR-011](adr/ADR-011-rate-limiting-defesa-em-camadas.md).
+
+---
+
+## `modules/stack`
+
+**O contrato EXT fica fora de `iac/`.** A partir de `iac/modules/stack`, são três níveis acima
+até a raiz do repositório.
+
+**A chave pública não é um segredo novo.** Já é entregue à Lambda de autenticação por
+`lambda_extra_env`; o authorizer reusa a mesma.
+
+**O bootstrap do GitOps é o único passo imperativo.** Um `null_resource` aplica o AppProject e
+o app-of-apps com `kubectl` depois que o ArgoCD sobe. A partir daí o Argo sincroniza a
+aplicação a partir do git, e os pods passam a aparecer no console como recursos do app — antes
+o deploy era `kubectl` solto, fora do rastreio do Argo. Roda só quando os manifests mudam ou
+no primeiro apply.
+
+---
+
+## `modules/lambda-authorizer`
+
+**O trigger de rebuild é o hash do código-fonte**, não o artefato compilado: no primeiro
+`plan` o binário ainda não existe.
+
+**`depends_on` defere a leitura do artefato para o apply**, depois do build, pelo mesmo motivo.
+
+**A compilação é `go build` na máquina do apply** (arm64). Não há imagem de container, então o
+apply continua em uma fase só — mas **exige Go instalado** no runner. Ver
+[ADR-007](adr/ADR-007-lambda-authorizer-opcional.md).
+
+**Runtime `provided.al2023`, arm64, sem VPC.** A verificação só precisa da chave pública, que
+vem do ambiente.
+
+---
+
+## `bootstrap/dns`
+
+**Aplicado uma única vez. Não entra no ciclo destroy/apply.**
+
+Os name servers da zona são delegados uma vez no painel do Registro.br. Se a zona fosse criada
+junto com HML ou PRD, cada `terraform destroy` geraria um conjunto novo de NS e exigiria
+reconfigurar o Registro.br à mão — exatamente o passo manual que a arquitetura quer eliminar.
+
+Delegando apenas um subdomínio, o restante do domínio (site, e-mail) continua sendo servido
+pelo Registro.br:
+
+```
+prd -> <sub>.<dominio>        (ápice da zona)
+hml -> hml.<sub>.<dominio>
+```
+
+Ver [ADR-008](adr/ADR-008-dominio-customizado-opcional.md).
+
+---
+
+## Esteiras
+
+**`terraform.yml` — resolução de domínio no plan e no apply.** Sem ela, o plano de PRD
+mostraria a destruição do domínio sempre que ele já estivesse publicado.
+
+**`terraform.yml` — setup de Go.** O módulo do authorizer compila o binário no apply
+(`null_resource`). Só faz diferença com `enable_jwt_authorizer = true`, mas o setup é barato e
+mantém o job correto nos dois casos.
+
+**`terraform.yml` — `enable_custom_domain`.** HML nunca usa domínio próprio, por decisão de
+custo: a variável nem existe naquele ambiente. Em PRD, `auto` liga o domínio apenas se a
+delegação NS já estiver ativa — sem ela o ACM pendura até estourar o timeout.
+
+**`dns-publish.yml` é a segunda fase da publicação do domínio**, separada porque a delegação NS
+no Registro.br é manual e não tem API pública. É idempotente e pode rodar de novo a qualquer
+momento:
+
+```
+1. dns-bootstrap.yml    cria a zona, imprime os NS
+2. [manual] Registro.br cadastra os NS
+3. dns-publish.yml      confere a delegação e liga o domínio em PRD
+```
+
+O timeout da emissão do certificado ACM é generoso de propósito: espera a validação DNS
+propagar. Todo o resto do stack já existe do apply anterior.
+
+**`contract.yml` — divergência de consumidores é esperada.** A lista pode diferir entre
+ambientes de propósito, para dar limites dedicados a um consumidor em PRD.
+
+---
+
+## Scripts
+
+**`gen-local-jwt-keys.sh`.** Gera o par RS256 do overlay `local` (kind). As chaves são de
+desenvolvimento, descartáveis e **não versionadas** (`*.pem` está no `.gitignore`). Rodar uma
+vez ao preparar o ambiente local. Produção não usa estas chaves: lá o secret
+`service-track-jwt` é entregue fora do git ([ADR-013](adr/ADR-013-chaves-jwt-fora-do-git.md)).
+
+Os formatos gerados são PKCS#8 (`BEGIN PRIVATE KEY`) e SPKI (`BEGIN PUBLIC KEY`) — os que o
+SmallRye JWT do Quarkus lê por padrão. Gerar em PKCS#1 faz a aplicação subir e falhar só na
+primeira validação de token.
