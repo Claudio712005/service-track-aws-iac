@@ -5,8 +5,6 @@ metadata:
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
-# Aplicado manualmente no cluster kind (dev local), fora do app-of-apps do EKS.
-#   kubectl apply -f kubernetes/argocd/local/service-track-local.application.yaml
 spec:
   project: service-track
   source:

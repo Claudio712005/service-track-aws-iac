@@ -17,10 +17,6 @@ spec:
   clusterResourceWhitelist:
     - group: ""
       kind: Namespace
-  # Inclui os recursos-filho (Pod, ReplicaSet, Endpoints) alem dos que os
-  # overlays declaram. Sem os filhos no projeto, a arvore de recursos do app
-  # nao renderiza os pods no console -- alem de o deploy passar a ser feito
-  # pelo proprio Argo (GitOps), nao mais por kubectl imperativo.
   namespaceResourceWhitelist:
     - group: ""
       kind: ConfigMap

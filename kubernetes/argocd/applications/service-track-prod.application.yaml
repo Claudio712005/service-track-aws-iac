@@ -8,7 +8,6 @@ metadata:
 spec:
   project: service-track
   source:
-    # Os manifests foram movidos do repo da API para o repo de IaC.
     repoURL: https://github.com/Claudio712005/service-track-aws-iac.git
     targetRevision: main
     path: kubernetes/k8s/overlays/prod
@@ -16,7 +15,6 @@ spec:
     server: https://kubernetes.default.svc
     namespace: service-track
   ignoreDifferences:
-    # O HPA governa o numero de replicas; ignorar evita luta entre Argo e HPA.
     - group: apps
       kind: Deployment
       jsonPointers:

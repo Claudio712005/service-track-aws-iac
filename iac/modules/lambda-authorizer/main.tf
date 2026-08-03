@@ -1,16 +1,11 @@
 locals {
   src_dir = "${path.module}/src"
 
-  # Hash do codigo-fonte: dispara rebuild e novo deploy quando qualquer .go ou o
-  # go.mod/go.sum muda, sem depender do artefato compilado (que nao existe no
-  # primeiro plan).
   src_hash = sha1(join("", [
     for f in fileset(local.src_dir, "**") : filesha1("${local.src_dir}/${f}")
   ]))
 }
 
-# Compila em go build (arm64) na maquina do apply. Nao ha imagem de container,
-# entao o apply continua em uma fase so -- ver ADR-007. Exige Go instalado.
 resource "null_resource" "build" {
   triggers = {
     src = local.src_hash
@@ -21,8 +16,6 @@ resource "null_resource" "build" {
   }
 }
 
-# depends_on defere a leitura para o apply, depois do build: no primeiro plan o
-# binario ainda nao existe.
 data "archive_file" "this" {
   type        = "zip"
   source_file = "${path.module}/build/bootstrap"
@@ -37,8 +30,6 @@ resource "aws_cloudwatch_log_group" "this" {
   tags              = var.tags
 }
 
-# Binario nativo Go no runtime provided.al2023 (arm64). Sem VPC: a verificacao so
-# precisa da chave publica, que vem do ambiente.
 resource "aws_lambda_function" "this" {
   function_name = var.name
   role          = var.lab_role_arn

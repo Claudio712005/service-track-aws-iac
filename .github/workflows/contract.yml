@@ -55,7 +55,6 @@ jobs:
           for group in ("cors", "usage-plan"):
               h = yaml.safe_load((base / group / "config-HML.yaml").read_text())
               p = yaml.safe_load((base / group / "config-PRD.yaml").read_text())
-              # consumers pode divergir de proposito (limites dedicados por ambiente)
               hk = {k for k in keys(h) if not k.startswith("consumers.")}
               pk = {k for k in keys(p) if not k.startswith("consumers.")}
               if hk != pk:

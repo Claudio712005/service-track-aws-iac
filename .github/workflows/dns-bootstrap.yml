@@ -2,12 +2,6 @@ name: DNS (zona persistente)
 
 run-name: "DNS ${{ inputs.action }} por @${{ github.actor }}"
 
-# Esteira separada de proposito: a hosted zone sobrevive ao destroy dos
-# ambientes. Se ela fosse criada junto com prd, cada recriacao geraria novos
-# name servers e exigiria reconfigurar o Registro.br na mao. Ver ADR-008.
-#
-# Rodar UMA vez. Depois disso, so `show` para reler os dados de delegacao.
-
 on:
   workflow_dispatch:
     inputs:

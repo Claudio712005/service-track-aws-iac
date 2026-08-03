@@ -1374,9 +1374,6 @@ paths:
         passthroughBehavior: when_no_match
     options: ${cors_options}
 
-  # ---------------------------------------------------------------------------
-  # Notificacoes
-  # ---------------------------------------------------------------------------
   /notificacoes:
     get:
       operationId: listarNotificacoes

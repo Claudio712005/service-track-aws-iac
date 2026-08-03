@@ -87,8 +87,6 @@ func parseRSAPublicKey(pemStr string) (*rsa.PublicKey, error) {
 		return nil, errors.New("chave publica JWT ausente ou nao e PEM valido")
 	}
 
-	// SPKI (BEGIN PUBLIC KEY) e o formato usual; PKCS#1 (BEGIN RSA PUBLIC KEY)
-	// e o fallback.
 	if key, err := x509.ParsePKIXPublicKey(block.Bytes); err == nil {
 		if rsaKey, ok := key.(*rsa.PublicKey); ok {
 			return rsaKey, nil
@@ -105,7 +103,6 @@ func b64urlDecode(s string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(s)
 }
 
-// decodeAndVerify valida assinatura, algoritmo, exp/nbf e emissor.
 func decodeAndVerify(token string, cfg config, now time.Time) (claims, error) {
 	var c claims
 
@@ -123,9 +120,6 @@ func decodeAndVerify(token string, cfg config, now time.Time) (claims, error) {
 		return c, fmt.Errorf("token malformado: header")
 	}
 
-	// Trava o algoritmo antes de qualquer verificacao. Aceitar o alg do proprio
-	// token permitiria "none" ou troca para HS256 usando a chave publica como
-	// segredo HMAC.
 	if h.Alg != "RS256" {
 		return c, fmt.Errorf("algoritmo nao suportado: %s", h.Alg)
 	}
@@ -163,10 +157,6 @@ func decodeAndVerify(token string, cfg config, now time.Time) (claims, error) {
 	return c, nil
 }
 
-// wildcardResource: arn:...:apiId/stage/GET/clientes/x -> arn:...:apiId/stage/*/*
-//
-// O resultado do authorizer e cacheado por token; restringir ao metodo exato
-// faria o cache errar em toda chamada a outra rota.
 func wildcardResource(methodArn string) string {
 	parts := strings.SplitN(methodArn, ":", 6)
 	if len(parts) < 6 {
@@ -237,7 +227,6 @@ func makeHandler(cfg config) func(context.Context, events.APIGatewayCustomAuthor
 
 		c, err := decodeAndVerify(token, cfg, time.Now())
 		if err != nil {
-			// Motivo detalhado so no log; o cliente recebe 401 generico.
 			log.Printf("token rejeitado: %v", err)
 			return events.APIGatewayCustomAuthorizerResponse{}, errUnauthorized
 		}
@@ -249,8 +238,6 @@ func makeHandler(cfg config) func(context.Context, events.APIGatewayCustomAuthor
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
-		// Falha de configuracao (chave ausente/invalida) derruba a funcao no
-		// cold start, em vez de rejeitar silenciosamente todo request.
 		log.Fatalf("configuracao invalida: %v", err)
 	}
 	lambda.Start(makeHandler(cfg))

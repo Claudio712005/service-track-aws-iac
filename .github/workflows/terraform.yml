@@ -148,8 +148,6 @@ jobs:
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
 
-      # Mesma resolucao do job de apply: sem ela o plano de PRD mostraria a
-      # destruicao do dominio sempre que ele ja estivesse publicado.
       - name: Resolver dominio customizado
         id: domain
         run: |
@@ -231,16 +229,11 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Necessario porque o modulo do authorizer compila o binario Go no apply
-      # (null_resource). So faz diferenca quando enable_jwt_authorizer=true, mas
-      # o setup e barato e mantem o job correto nos dois casos.
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
           cache-dependency-path: iac/modules/lambda-authorizer/src/go.sum
 
-      # O bootstrap do ArgoCD (null_resource no stack) aplica o app-of-apps com
-      # kubectl no apply. Roda so quando os manifests mudam ou no primeiro apply.
       - uses: azure/setup-kubectl@v4
         with:
           version: "v1.30.0"
@@ -248,9 +241,6 @@ jobs:
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
 
-      # HML nunca usa dominio proprio (decisao de custo): a variavel nem existe
-      # naquele ambiente. Em PRD, `auto` liga o dominio apenas se a delegacao NS
-      # ja estiver ativa -- sem ela o ACM pendura ate estourar o timeout.
       - name: Resolver dominio customizado
         id: domain
         run: |

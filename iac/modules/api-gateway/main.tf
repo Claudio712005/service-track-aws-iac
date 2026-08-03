@@ -2,8 +2,6 @@ locals {
   cors = yamldecode(file(var.cors_config_path))["cors"]
   plan = yamldecode(file(var.usage_plan_config_path))
 
-  # Defesa por IP no nivel de rede, complementar ao throttle por API key do
-  # usage plan. Ligada so onde o config declara waf.enabled (hoje: PRD).
   waf         = try(local.plan["waf"], { enabled = false })
   waf_enabled = try(local.waf["enabled"], false)
 
@@ -52,9 +50,6 @@ locals {
     }
   })
 
-  # Com authorizer desligado o esquema e um http/bearer que o API Gateway ignora
-  # (contrato apenas). Ligado, vira o authorizer custom aplicado a toda operacao
-  # que referencia bearerAuth -- rotas com `security: []` seguem abertas.
   bearer_auth_scheme = var.authorizer_invoke_arn == null ? jsonencode({
     type         = "http"
     scheme       = "bearer"
@@ -88,8 +83,6 @@ locals {
     if try(cfg["enabled"], true)
   }
 
-  # Consumidor que declara throttle ou quota proprios ganha usage plan dedicado;
-  # os demais compartilham o plano do ambiente.
   dedicated_consumers = {
     for name, cfg in local.consumers : name => cfg
     if lookup(cfg, "throttle", null) != null || lookup(cfg, "quota", null) != null
@@ -104,8 +97,6 @@ locals {
   create_domain      = var.custom_domain != null
   create_certificate = var.custom_domain != null && try(var.custom_domain.certificate_arn, null) == null
 
-  # A zona pode vir por ID ou por nome. Por nome evita carregar o ID em tfvars
-  # (que e gitignored) ou em secret de pipeline.
   lookup_zone = (
     var.custom_domain != null &&
     try(var.custom_domain.hosted_zone_name, null) != null &&
@@ -316,8 +307,6 @@ resource "aws_lambda_permission" "auth" {
   source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/*/*/*"
 }
 
-# O authorizer e criado pela importacao do OpenAPI, entao nao ha recurso
-# Terraform para referenciar: a permissao usa o wildcard de authorizers da API.
 resource "aws_lambda_permission" "authorizer" {
   count = var.authorizer_invoke_arn == null ? 0 : 1
 
@@ -402,15 +391,6 @@ resource "aws_route53_record" "api" {
     evaluate_target_health = false
   }
 }
-
-# -----------------------------------------------------------------------------
-# WAF (opcional, por ambiente)
-#
-# Regra rate-based por IP de origem: acima do limite em janela de 5 min, o IP e
-# bloqueado ate cair abaixo. Complementa o usage plan, que limita por API key --
-# o WAF barra flood distribuido/anonimo antes de gastar a Lambda ou o backend.
-# Escopo REGIONAL, associado ao stage do REST API. Ver ADR-011.
-# -----------------------------------------------------------------------------
 
 resource "aws_wafv2_web_acl" "this" {
   count = local.waf_enabled ? 1 : 0

@@ -1,7 +1,6 @@
 terraform {
   required_version = ">= 1.10.0"
 
-  # State separado dos ambientes: esta zona sobrevive a destroy/apply de hml e prd.
   backend "s3" {
     bucket       = "servicetrack-tfstate-123124496645"
     key          = "servicetrack/bootstrap-dns/terraform.tfstate"

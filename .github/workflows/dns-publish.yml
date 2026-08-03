@@ -2,15 +2,6 @@ name: DNS (publicar dominio em PRD)
 
 run-name: "Publicar api.clausilva.com.br por @${{ github.actor }}"
 
-# Segunda fase da publicacao do dominio, separada porque a delegacao NS no
-# Registro.br e manual (sem API publica).
-#
-#   1. DNS (zona persistente)  -> cria a zona, imprime os NS
-#   2. [manual] Registro.br    -> cadastra os NS
-#   3. ESTA esteira            -> confere a delegacao e liga o dominio em PRD
-#
-# Idempotente: pode rodar de novo a qualquer momento.
-
 on:
   workflow_dispatch:
     inputs:
@@ -89,8 +80,6 @@ jobs:
       - name: terraform init
         run: terraform -chdir=$WORKDIR init
 
-      # A emissao do certificado ACM espera a validacao DNS propagar; por isso o
-      # timeout generoso. Todo o resto do stack ja existe deste apply anterior.
       - name: terraform apply (com dominio)
         id: apply
         timeout-minutes: 30

@@ -20,13 +20,9 @@ locals {
     ManagedBy   = "terraform"
   })
 
-  # Contrato de exposicao externa da API (EXT), versionado fora do iac/.
-  # A partir de iac/modules/stack, tres niveis acima e a raiz do repositorio.
   api_ext_dir = "${path.module}/../../../apis/service-track-api-ext"
   env_suffix  = upper(var.environment)
 
-  # A chave publica ja e entregue a Lambda de autenticacao por lambda_extra_env;
-  # o authorizer reusa a mesma, sem novo segredo.
   jwt_private_key_pem = tls_private_key.jwt.private_key_pem_pkcs8
   jwt_public_key_pem  = tls_private_key.jwt.public_key_pem
 
@@ -131,10 +127,6 @@ module "addons" {
   node_group_dependency        = module.eks.node_group
 }
 
-# Bootstrap do GitOps: aplica o AppProject e o app-of-apps depois que o ArgoCD
-# sobe. E o unico passo imperativo -- a partir dai o Argo sincroniza a aplicacao
-# a partir do git, e os pods passam a aparecer no console como recursos do app
-# (antes o deploy era feito por kubectl solto, fora do rastreio do Argo).
 locals {
   argocd_bootstrap_files = [
     "${path.module}/../../../kubernetes/argocd/projects/service-track.appproject.yaml",
@@ -248,7 +240,6 @@ resource "null_resource" "argocd_bootstrap" {
   depends_on = [module.addons, null_resource.app_secrets_bootstrap]
 }
 
-# Repositorio ECR da imagem da aplicacao (deploy no EKS).
 module "ecr_app" {
   source = "../ecr"
 
@@ -258,7 +249,6 @@ module "ecr_app" {
   tags                 = local.tags
 }
 
-# Repositorio ECR da imagem da Lambda de autenticacao.
 module "ecr_lambda" {
   source = "../ecr"
 
@@ -313,7 +303,6 @@ resource "aws_security_group_rule" "rds_from_lambda" {
   source_security_group_id = module.lambda_auth.security_group_id
 }
 
-# Caminho privado do API Gateway ate a aplicacao no EKS.
 module "vpc_link" {
   source = "../vpc-link"
 
@@ -329,8 +318,6 @@ module "vpc_link" {
   health_check_path      = var.app_health_check_path
 }
 
-# Authorizer de JWT na borda. Opcional: por padrao a validacao fica so no
-# backend. Ver ADR-007.
 module "jwt_authorizer" {
   source = "../lambda-authorizer"
   count  = var.enable_jwt_authorizer ? 1 : 0
@@ -343,8 +330,6 @@ module "jwt_authorizer" {
   jwt_leeway_seconds = var.jwt_leeway_seconds
 }
 
-# API Gateway REST definido pelo contrato EXT. Roteia /autenticacao* para a
-# Lambda e o restante para a aplicacao no EKS via VPC Link.
 module "api_gateway" {
   source = "../api-gateway"
 

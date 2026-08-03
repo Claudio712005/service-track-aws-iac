@@ -23,8 +23,6 @@ env:
   AWS_REGION: us-east-1
   TF_VERSION: 1.10.5
 
-# Primeira fase de qualquer ambiente. A VPC precisa existir antes do banco, que
-# vive em service-track-db-infra, e o banco antes do stack. Ver DB-ADR-003.
 jobs:
   network:
     name: ${{ inputs.action }} da rede de ${{ inputs.env }}

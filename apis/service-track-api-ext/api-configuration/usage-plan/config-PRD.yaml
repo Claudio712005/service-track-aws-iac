@@ -39,8 +39,6 @@ stage:
 
   accessLogRetentionDays: 14
 
-# WAF rate-based por IP: bloqueia IP acima de rateLimit requisicoes em 5 min.
-# Complementa o throttle por API key do usage plan. Ver ADR-011.
 waf:
   enabled: true
   rateLimit: 2000
