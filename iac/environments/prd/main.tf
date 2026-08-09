@@ -5,10 +5,10 @@ module "stack" {
   environment = "prd"
 
   cluster_version     = "1.30"
-  node_instance_types = ["t3.large"]
-  node_desired_size   = 2
-  node_min_size       = 2
-  node_max_size       = 4
+  node_instance_types = ["t3.medium"]
+  node_desired_size   = 1
+  node_min_size       = 1
+  node_max_size       = 2
 
   lambda_image_tag   = var.lambda_image_tag
   lambda_memory_size = 1024
@@ -34,23 +34,23 @@ module "stack" {
     site        = var.datadog_site
     notificacao = var.datadog_notificacao
 
-    cluster_agent_replicas = 2
-    espalhar_por_az        = true
+    cluster_agent_replicas = 1
+    espalhar_por_az        = false
     coletar_logs           = true
     coletar_traces         = true
 
     recursos_node_agent = {
-      requests_cpu    = "200m"
-      requests_memory = "512Mi"
-      limits_cpu      = "700m"
-      limits_memory   = "1Gi"
+      requests_cpu    = "100m"
+      requests_memory = "256Mi"
+      limits_cpu      = "400m"
+      limits_memory   = "512Mi"
     }
 
     recursos_cluster_agent = {
-      requests_cpu    = "200m"
-      requests_memory = "256Mi"
-      limits_cpu      = "500m"
-      limits_memory   = "512Mi"
+      requests_cpu    = "100m"
+      requests_memory = "128Mi"
+      limits_cpu      = "300m"
+      limits_memory   = "256Mi"
     }
 
     limite_latencia_p95_segundos = 1.5
