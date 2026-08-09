@@ -127,6 +127,7 @@ jobs:
     env:
       TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
       TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
+      TF_VAR_datadog_notificacao: ${{ secrets.DD_NOTIFICACAO }}
       TF_VAR_unsplash_access_key: ${{ secrets.UNSPLASH_ACCESS_KEY }}
       TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
     steps:
@@ -211,6 +212,7 @@ jobs:
     env:
       TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
       TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
+      TF_VAR_datadog_notificacao: ${{ secrets.DD_NOTIFICACAO }}
       TF_VAR_unsplash_access_key: ${{ secrets.UNSPLASH_ACCESS_KEY }}
       TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
     steps:
@@ -410,6 +412,7 @@ jobs:
     env:
       TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
       TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
+      TF_VAR_datadog_notificacao: ${{ secrets.DD_NOTIFICACAO }}
       TF_VAR_unsplash_access_key: ${{ secrets.UNSPLASH_ACCESS_KEY }}
       TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
     steps:

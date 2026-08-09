@@ -88,7 +88,7 @@ variable "datadog_site" {
 }
 
 variable "datadog_notificacao" {
-  description = "Destino dos alertas no formato do Datadog, por exemplo @slack-canal."
+  description = "Destino dos alertas no formato do Datadog. Para e-mail, @usuario@dominio.com; para Slack, @slack-canal. Vem da secret DD_NOTIFICACAO."
   type        = string
   default     = ""
 }
