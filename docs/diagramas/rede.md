@@ -28,7 +28,7 @@ flowchart TB
 
         subgraph privadas["Subnets privadas · /20 em us-east-1a e us-east-1b"]
             nlb["NLB interno<br/>TCP 80 -> NodePort 30080"]
-            nodes["EKS node group<br/>t3.small 1..2 hml<br/>t3.large 2..4 prd"]
+            nodes["EKS node group<br/>t3.small ×1 hml<br/>t3.medium 1..2 prd"]
             lambdaauth["Lambda de autenticação<br/>ENIs na VPC"]
             rds[("RDS PostgreSQL<br/>single-AZ hml · Multi-AZ prd<br/>service-track-db-infra")]
         end

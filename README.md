@@ -45,7 +45,7 @@ iac/
     stack/         Composicao que liga todos os modulos acima
   environments/
     hml/           Homologacao (node t3.small) - state key servicetrack/hml
-    prd/           Producao   (node t3.large) - state key servicetrack/prd
+    prd/           Producao   (node t3.medium) - state key servicetrack/prd
 
 docs/
   adr/             Decisoes arquiteturais (ADR-001 a ADR-025)
@@ -157,6 +157,7 @@ Esta é a lista completa do que precisa existir e como criar.
 | `RESEND_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Resend |
 | `DD_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → API Keys |
 | `DD_APP_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → Application Keys |
+| `DD_NOTIFICACAO` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Destino do alerta no formato do Datadog: `@voce@dominio.com` para e-mail, `@slack-canal` para Slack |
 
 **Segredo que pode ser gerado é gerado no apply** ([ADR-018](docs/adr/ADR-018-segredos-gerados-no-apply.md)).
 Só permanecem como secret do GitHub os que vêm de terceiro.
@@ -263,6 +264,7 @@ que sobrevivam à recriação do ambiente.
 |---|---|---|
 | `DD_API_KEY` | ingestão de métricas, traces e logs pelo agente | a observabilidade fica **desligada** no ambiente inteiro |
 | `DD_APP_KEY` | criar dashboards e monitores pela API do Datadog | o agente sobe e coleta, mas nenhum alerta ou dashboard é criado |
+| `DD_NOTIFICACAO` | destino das notificações dos monitores | os monitores disparam, mas só aparecem no painel de Monitors do Datadog — ninguém é avisado |
 
 Ambas vão em **Settings → Secrets and variables → Actions → Secrets**, nos environments `hml`
 e `prd`. `DD_API_KEY` vazia desliga a observabilidade sem quebrar o apply — é o que permite
@@ -624,7 +626,7 @@ aws eks update-kubeconfig --name servicetrack-prd --region us-east-1
 
 | Recurso            | hml           | prd            |
 |--------------------|---------------|----------------|
-| Nodes EKS          | `t3.small`    | `t3.large`     |
+| Nodes EKS          | `t3.small` ×1 | `t3.medium` 1..2 |
 | Node group (min/desired/max) | 1 / 1 / 2 | 2 / 2 / 4 |
 | RDS                | `db.t3.micro` | `db.t3.medium` |
 | Storage RDS        | 20 GB         | 50 GB          |

@@ -33,7 +33,7 @@ flowchart TB
                 argo["ArgoCD<br/>sincroniza kubernetes/k8s/overlays/{env}"]
             end
             subgraph nsapp["namespace service-track"]
-                app["Deployment service-track-app<br/>Kotlin/Quarkus · porta 8080<br/>HPA 2..10 só em prod"]
+                app["Deployment service-track-app<br/>Kotlin/Quarkus · porta 8080<br/>HPA 2..4 só em prod"]
                 svc["Service NodePort 30080"]
                 cfg["ConfigMap service-track-db<br/>ConfigMap service-track-runtime<br/>Secret service-track-secret<br/>Secret service-track-jwt<br/>Secret service-track-gateway"]
             end
@@ -104,8 +104,8 @@ convivem: `iac/environments/prd/` aplica a infraestrutura, `kubernetes/k8s/overl
 que o ArgoCD sincroniza. Errar o nome ao montar caminho é falha silenciosa — o Kustomize
 simplesmente não acha o diretório.
 
-**Só `prod` tem HPA.** `kubernetes/k8s/overlays/prod/hpa.yaml` define 2..10 réplicas com CPU a
-70% e memória a 80%. O overlay `hml` não sobrescreve réplicas e roda no valor do `base`, o que
+**Só `prod` tem HPA.** `kubernetes/k8s/overlays/prod/hpa.yaml` define 2..4 réplicas com CPU a
+70% e memória a 80%. As 4 cabem em um único `t3.medium`, então a escala não espera node novo. O overlay `hml` não sobrescreve réplicas e roda no valor do `base`, o que
 é coerente com o enxugamento de HML por custo (`IAC-ADR-014`). Ao mexer nesse teto, rever o
 orçamento de conexões do banco (`DB-ADR-004`).
 

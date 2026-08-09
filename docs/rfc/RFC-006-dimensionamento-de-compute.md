@@ -1,6 +1,6 @@
 # RFC-006 — Dimensionamento de compute por ambiente
 
-- **Status:** implementado
+- **Status:** implementado, revisado em 2026-08-02
 - **Data:** 2026-07-31
 - **ADR resultante:** [023](../adr/ADR-023-dimensionamento-de-compute-por-ambiente.md)
 
@@ -72,7 +72,8 @@ de execução próprio, que a conta não permite criar.
 
 ## 4. Solução adotada
 
-`t3.small` × 1 (teto 2) em HML, sem HPA. `t3.large` × 2 (teto 4) em PRD, HPA de 2 a 10.
+`t3.small` × 1 (teto 1) em HML, sem HPA. `t3.medium` × 1 (teto 2) em PRD, HPA de 2 a 4.
+Ver a revisão na seção 7.
 
 A aritmética que sustenta cada número está em
 [ADR-023](../adr/ADR-023-dimensionamento-de-compute-por-ambiente.md).
@@ -83,12 +84,44 @@ A aritmética que sustenta cada número está em
 |---|---|
 | HML não exercita autoscaling; defeito de concorrência entre réplicas passa direto | Aceito e documentado. Teste de múltiplas réplicas é manual, em PRD, antes da apresentação |
 | Créditos de CPU da família `t3` esgotam em carga sustentada e geram custo não previsto | Não usar este cluster para teste de carga prolongado |
-| `node_max_size = 4` em PRD com 10 réplicas deixa pouca folga de CPU | Cluster Autoscaler tem espaço para 2 nodes extras antes do teto |
+| PRD roda em um node só; perdê-lo derruba a aplicação até o ASG substituir | Aceito em ambiente de apresentação |
 
 ## 6. Evolução possível
 
-- Reduzir o limite de memória do pod para 384 MiB e reavaliar `t3.medium` em PRD (~US$ 60/mês).
-- Instâncias Spot no node group de HML: até 70% de desconto, e a interrupção é irrelevante em
-  ambiente de teste.
-- Rever o teto do HPA junto com o orçamento de conexões: hoje 10 réplicas × 15 conexões
-  consomem 170 das 300 do `db.t3.medium`.
+- Instâncias Spot no node group: até 70% de desconto, e a interrupção é tolerável nos dois
+  ambientes deste projeto.
+- Alinhar o `app_replicas_max` do orçamento de conexões ao novo teto do HPA e reavaliar a
+  classe do RDS. Com 4 réplicas o consumo cai de 170 para 68 conexões, o que traria
+  `db.t3.small` de volta à mesa (~US$ 50/mês).
+
+---
+
+## 7. Revisão de 02/08/2026
+
+**Gatilho:** o cenário não precisa ser dimensionado como produção. É um ambiente de
+apresentação que fica ligado por horas.
+
+A opção B desta RFC — `t3.medium` em PRD — tinha sido rejeitada por margem de memória com 10
+réplicas. Ao baixar o teto do HPA de 10 para 4, a margem deixa de ser problema e a opção passa
+a ser a certa. O gatilho previsto na seção 6 era outro (reduzir o limite de memória do pod
+para 384 MiB), mas a conclusão é a mesma.
+
+| | Antes | Depois |
+|---|---|---|
+| HML | `t3.small` × 1, teto 2 | `t3.small` × 1, teto **1** |
+| PRD | `t3.large` × 2, teto 4 | `t3.medium` × **1**, teto **2** |
+| HPA de PRD | 2..10 | **2..4** |
+| Datadog cluster agent em PRD | 2 réplicas, espalhado por AZ | **1 réplica**, sem anti-afinidade |
+| Custo de PRD | ~US$ 120 a 240/mês | **~US$ 30 a 60/mês** |
+
+**Ganho não previsto:** com 4 réplicas cabendo em um único `t3.medium`, o HPA escala sem
+esperar o Cluster Autoscaler criar máquina. A escala passa a ser de segundos em vez de
+minutos — melhor para demonstrar ao vivo do que o dimensionamento anterior.
+
+**Obrigatório junto:** `cluster_agent_replicas = 1` e `espalhar_por_az = false` em PRD. Com um
+node só, a anti-afinidade por zona deixaria a segunda réplica do cluster agent `Pending` para
+sempre.
+
+**Fica em aberto:** o `app_replicas_max` do orçamento de conexões em `service-track-db-infra`
+continua em 10. Passou a reservar 170 conexões para um teto real de 68. É conservador, não
+quebrado, mas destrava reavaliar a classe do RDS — ver `DB-ADR-006`.
