@@ -1,0 +1,72 @@
+name: Bootstrap do state
+
+run-name: "Bootstrap do backend S3 por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment de onde ler as credenciais AWS"
+        required: true
+        type: choice
+        options: [hml, prd]
+        default: hml
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+concurrency:
+  group: bootstrap-state
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Cria o bucket de state
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Criar ou confirmar o bucket
+        id: bucket
+        run: |
+          bash scripts/bootstrap-tfstate.sh | tee /tmp/saida.txt
+          CONTA="$(aws sts get-caller-identity --query Account --output text)"
+          echo "conta=$CONTA" >> "$GITHUB_OUTPUT"
+          echo "bucket=servicetrack-tfstate-$CONTA" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Bootstrap do state"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Conta AWS | \`${{ steps.bucket.outputs.conta }}\` |"
+            echo "| Bucket | \`${{ steps.bucket.outputs.bucket }}\` |"
+            echo "| Resultado | ${{ steps.bucket.outcome }} |"
+            echo ""
+            if [ "${{ steps.bucket.outcome }}" = "success" ]; then
+              echo "Backend pronto. Siga para a esteira **Network**."
+              echo ""
+              echo "> Este bucket sobrevive ao \`destroy\` dos ambientes. Nao remover."
+            else
+              echo "Falhou. A causa mais comum e a conta do laboratorio ter sido recriada"
+              echo "com outro ID: o nome do bucket esta fixado em 12 lugares entre este"
+              echo "repositorio e o \`service-track-db-infra\`. O log do passo anterior"
+              echo "imprime o comando de substituicao."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
