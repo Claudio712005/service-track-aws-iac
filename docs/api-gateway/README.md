@@ -17,7 +17,6 @@ Para o *porquê* de cada decisão, ver [`docs/adr/`](../adr/) e
 - [Autenticação e autorização](#autenticação-e-autorização)
 - [Validação de request](#validação-de-request)
 - [Integração com os backends](#integração-com-os-backends)
-- [Domínio customizado](#domínio-customizado)
 - [Observabilidade](#observabilidade)
 - [Contract testing](#contract-testing)
 - [Destruir e recriar](#destruir-e-recriar)
@@ -35,7 +34,7 @@ apis/service-track-api-ext/
 
 iac/modules/
 ├── api-gateway/       REST API, stage, deployment, usage plans, API keys, logs,
-│                      CORS de erro, domínio customizado
+│                      CORS de erro
 ├── lambda-authorizer/ authorizer de JWT (Go, provided.al2023) + testes
 └── vpc-link/          NLB interno, target group, ASG attachment, VPC Link
 
@@ -264,7 +263,7 @@ O preflight tem `security: []`: navegadores não enviam `x-api-key` no `OPTIONS`
 então exigir API key faria todo o CORS falhar.
 
 Valores atuais: `allowOrigin: "*"` nos dois ambientes, porque ainda não existe
-domínio próprio para o front. Fechar o CORS em PRD é editar **uma linha** em
+origem própria para o front. Fechar o CORS em PRD é editar **uma linha** em
 `cors/config-PRD.yaml`.
 
 ## Autenticação e autorização
@@ -378,85 +377,6 @@ health específica do framework. Para usar HTTP:
 app_health_check_protocol = "HTTP"
 app_health_check_path     = "/actuator/health"   # ou /q/health
 ```
-
-## Domínio customizado
-
-Opcional ([ADR-008](../adr/ADR-008-dominio-customizado-opcional.md)). Sem ele, a
-API responde apenas pelo endpoint `execute-api`, cuja URL **muda a cada
-recriação** do ambiente.
-
-### Por que a hosted zone fica fora do state do ambiente
-
-`aws_api_gateway_domain_name` publica um alvo `d-<aleatório>.execute-api...` que é
-**regerado a cada recriação**. Com o DNS fora da AWS (Registro.br), isso
-significaria editar o registro à mão toda vez. Com uma hosted zone Route53
-persistente, o alias é refeito dentro dela pelo Terraform e o Registro.br nunca
-mais é tocado.
-
-```
-iac/bootstrap/dns/     hosted zone      aplicado UMA vez, nunca destruído
-iac/environments/*/    cert + alias     destruído e recriado à vontade
-```
-
-### Passo 1 — criar a zona (uma vez)
-
-```bash
-cd iac/bootstrap/dns
-cp terraform.tfvars.example terraform.tfvars   # registered_domain, subdomain
-terraform init
-terraform apply
-
-terraform output registro_br_instrucoes
-```
-
-### Passo 2 — delegar no Registro.br (uma vez)
-
-O output acima imprime os 4 name servers. No painel
-**registro.br → Painel → `clausilva.com.br` → DNS → Editar zona**, crie um
-registro `NS` para cada um deles, com o nome `api`. Confirme:
-
-```bash
-dig +short NS api.clausilva.com.br
-```
-
-Delega-se o **subdomínio**, não o ápice — `clausilva.com.br` continua servido pelo
-Registro.br para site e e-mail.
-
-### Passo 3 — publicar em PRD
-
-Pela esteira **DNS (publicar dominio em PRD)**, que confere a delegação antes de
-aplicar. Localmente equivale a:
-
-```bash
-terraform -chdir=iac/environments/prd apply -var="enable_custom_domain=true"
-```
-
-O domínio e a zona são defaults commitados em
-`iac/environments/prd/variables.tf` — não são segredo e ficam versionados.
-
-| Ambiente | URL |
-|---|---|
-| PRD | `https://api.clausilva.com.br/service-track/v1/clientes` |
-| HML | sem domínio — só `execute-api` |
-
-**HML não usa domínio próprio**: a variável nem existe naquele ambiente. Decisão
-de custo, para liberar orçamento para observabilidade.
-
-Se preferir gerenciar o DNS por fora, informe `certificate_arn` e aponte o
-registro manualmente para `terraform output api_custom_domain_target` — lembrando
-que **esse alvo muda a cada recriação**.
-
-### A partir daí
-
-`terraform destroy` + `apply` refaz certificado, domínio e alias sozinho. A zona
-sobrevive porque está em outro state (`servicetrack/bootstrap-dns`).
-
-> **Nunca** rode `terraform destroy` em `iac/bootstrap/dns` junto com os
-> ambientes: derrubar a zona custa uma nova delegação no Registro.br e horas de
-> propagação.
-
-Custo: ~US$ 0,50/mês pela hosted zone. É o único componente que continua sendo
-cobrado com todos os ambientes destruídos.
 
 ## Observabilidade
 

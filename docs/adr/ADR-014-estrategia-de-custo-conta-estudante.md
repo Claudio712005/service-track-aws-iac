@@ -25,7 +25,6 @@ Por ambiente, com tudo ligado:
 | NAT Gateway | ~US$ 32/mês | + tráfego processado |
 | NLB (VPC Link) | ~US$ 16/mês | inevitável para integração privada com o EKS |
 | WAF (só PRD) | ~US$ 6/mês | ver [ADR-011](ADR-011-rate-limiting-defesa-em-camadas.md) |
-| Route53 hosted zone | ~US$ 0,50/mês | persistente, ver [ADR-008](ADR-008-dominio-customizado-opcional.md) |
 
 Dois ambientes simultâneos ligados = ~US$ 250+/mês, acima do teto típico da
 Academy. O controle central de custo **não é técnico, é operacional**: destruir o
@@ -48,7 +47,7 @@ mensal.
 | HML sem LoadBalancer do ArgoCD | `argocd_expose_lb=false` | ~US$ 16/mês |
 | HML sem métricas detalhadas do API Gateway | `detailedMetrics=false` | até ~US$ 100/mês |
 | WAF só em PRD | `waf.enabled` por ambiente | ~US$ 6/mês em HML |
-| HML sem domínio customizado | sem `custom_domain` em HML | ACM/alias evitados |
+| Domínio próprio removido | `ADR-008` revogada | hosted zone e ACM evitados nos dois ambientes |
 | Retenção de logs curta | 3 dias (HML) / 14 (PRD) | armazenamento CloudWatch |
 | Sem LoadBalancer público na app | NodePort + VPC Link | ~US$ 16/mês, ver [ADR-012](ADR-012-gitops-eks-nodeport.md) |
 

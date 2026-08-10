@@ -11,7 +11,7 @@
 | [005](adr/ADR-005-autorizacao-jwt-no-backend.md) | JWT no backend, API Key controla consumo *(revisado pelo 007)* |
 | [006](adr/ADR-006-ambientes-efemeros-e-conta-educacional.md) | Ambientes efêmeros e conta educacional |
 | [007](adr/ADR-007-lambda-authorizer-opcional.md) | Lambda authorizer de JWT como recurso opcional |
-| [008](adr/ADR-008-dominio-customizado-opcional.md) | Domínio customizado opcional com base path |
+| [008](adr/ADR-008-dominio-customizado-opcional.md) | Domínio customizado com base path — **revogada em 02/08/2026** |
 | [009](adr/ADR-009-multiplas-api-keys-por-consumidor.md) | Uma API key por consumidor |
 | [010](adr/ADR-010-contract-testing-na-pipeline.md) | Contract testing em duas camadas |
 | [011](adr/ADR-011-rate-limiting-defesa-em-camadas.md) | Rate limiting e defesa em camadas na borda |

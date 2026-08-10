@@ -46,9 +46,6 @@ do OpenAPI, então não existe recurso Terraform para referenciar no `source_arn
 **Usage plan dedicado por consumidor.** Quem declara `throttle` ou `quota` próprios ganha um
 plano só seu; os demais compartilham o plano do ambiente.
 
-**A hosted zone pode vir por ID ou por nome.** Por nome evita carregar o ID em `tfvars` (que é
-gitignored) ou em secret de pipeline.
-
 **WAF.** Regra rate-based por IP de origem: acima do limite em janela de 5 min, o IP é
 bloqueado até cair abaixo. Escopo `REGIONAL`, associado ao stage do REST API. Complementa o
 usage plan, que limita por API key — o WAF barra flood distribuído e anônimo antes de gastar a
@@ -89,51 +86,11 @@ vem do ambiente.
 
 ---
 
-## `bootstrap/dns`
-
-**Aplicado uma única vez. Não entra no ciclo destroy/apply.**
-
-Os name servers da zona são delegados uma vez no painel do Registro.br. Se a zona fosse criada
-junto com HML ou PRD, cada `terraform destroy` geraria um conjunto novo de NS e exigiria
-reconfigurar o Registro.br à mão — exatamente o passo manual que a arquitetura quer eliminar.
-
-Delegando apenas um subdomínio, o restante do domínio (site, e-mail) continua sendo servido
-pelo Registro.br:
-
-```
-prd -> <sub>.<dominio>        (ápice da zona)
-hml -> hml.<sub>.<dominio>
-```
-
-Ver [ADR-008](adr/ADR-008-dominio-customizado-opcional.md).
-
----
-
 ## Esteiras
-
-**`terraform.yml` — resolução de domínio no plan e no apply.** Sem ela, o plano de PRD
-mostraria a destruição do domínio sempre que ele já estivesse publicado.
 
 **`terraform.yml` — setup de Go.** O módulo do authorizer compila o binário no apply
 (`null_resource`). Só faz diferença com `enable_jwt_authorizer = true`, mas o setup é barato e
 mantém o job correto nos dois casos.
-
-**`terraform.yml` — `enable_custom_domain`.** HML nunca usa domínio próprio, por decisão de
-custo: a variável nem existe naquele ambiente. Em PRD, `auto` liga o domínio apenas se a
-delegação NS já estiver ativa — sem ela o ACM pendura até estourar o timeout.
-
-**`dns-publish.yml` é a segunda fase da publicação do domínio**, separada porque a delegação NS
-no Registro.br é manual e não tem API pública. É idempotente e pode rodar de novo a qualquer
-momento:
-
-```
-1. dns-bootstrap.yml    cria a zona, imprime os NS
-2. [manual] Registro.br cadastra os NS
-3. dns-publish.yml      confere a delegação e liga o domínio em PRD
-```
-
-O timeout da emissão do certificado ACM é generoso de propósito: espera a validação DNS
-propagar. Todo o resto do stack já existe do apply anterior.
 
 **`contract.yml` — divergência de consumidores é esperada.** A lista pode diferir entre
 ambientes de propósito, para dar limites dedicados a um consumidor em PRD.

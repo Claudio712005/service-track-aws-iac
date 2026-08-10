@@ -1,5 +1,29 @@
 # ADR-008 — Domínio customizado opcional com base path `/service-track/v1`
 
+> **REVOGADA em 02/08/2026.** O domínio customizado foi removido por completo do código, das
+> esteiras e dos scripts.
+>
+> **Motivo:** não é requisito do Tech Challenge, e o passo que ele exige — cadastrar os name
+> servers no painel do Registro.br — **não tem API** e portanto não pode ser automatizado. Numa
+> conta de laboratório que é recriada, isso vira trabalho manual recorrente para entregar uma
+> URL bonita que ninguém avalia.
+>
+> **O que foi removido:** o state `iac/bootstrap/dns`, as esteiras `DNS (zona persistente)` e
+> `DNS (publicar dominio em PRD)`, os scripts `dns-zone-state.sh` e `dns-delegation-check.sh`,
+> o recurso de domínio e certificado ACM no módulo `api-gateway`, e o input `custom_domain` da
+> esteira Terraform.
+>
+> **Consequência aceita:** a API é servida apenas pelo endpoint `execute-api`, cuja URL **muda
+> a cada recriação do ambiente**. O `SERVICETRACK_API_BASE_URL` que monta o link de aprovação
+> por e-mail passa a ler sempre esse endpoint do SSM, o que já era o comportamento quando não
+> havia domínio.
+>
+> **Se houver hosted zone criada na conta AWS**, ela não é destruída por esta remoção — apenas
+> deixa de ser gerenciada pelo Terraform. Removê-la é ação manual no console.
+>
+> O registro abaixo fica como histórico da decisão original.
+
+
 - **Status:** aceito
 - **Data:** 2026-07-23
 

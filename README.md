@@ -27,8 +27,6 @@ apis/
 iac/
   network/
     hml/ prd/      VPC e subnets - state proprio, PRIMEIRA fase de cada ambiente
-  bootstrap/
-    dns/           Hosted zone Route53 - PERSISTENTE, state proprio, aplicada uma vez
   modules/
     network/       VPC, subnets publicas/privadas, IGW, NAT, rotas
     eks/           Cluster EKS + node group
@@ -39,7 +37,7 @@ iac/
     lambda-authorizer/ Authorizer de JWT na borda (Go, provided.al2023) + testes
     vpc-link/      NLB interno + VPC Link (API Gateway -> EKS)
     api-gateway/   REST API a partir do openApi.yaml, usage plans, API keys,
-                   CORS, dominio customizado
+                   CORS
     datadog-agent/ Node agent e cluster agent via Helm (hml e prd)
     observability/ Monitores e dashboard do Datadog
     stack/         Composicao que liga todos os modulos acima
@@ -57,8 +55,7 @@ docs/
   network.yml        Aplica a rede do ambiente (manual) - primeira fase
   contract.yml       Valida contrato + authorizer + fmt/validate (push e PR)
   terraform.yml      plan / apply / destroy por ambiente (manual)
-  dns-bootstrap.yml  Cria a hosted zone persistente e imprime os NS (manual)
-  dns-publish.yml    Publica o dominio em PRD apos a delegacao (manual)
+  bootstrap-state.yml Cria o bucket S3 do state (manual, uma vez por conta)
 ```
 
 Cada ambiente é um root module fino: configura os providers, define o backend S3
@@ -115,16 +112,15 @@ aceita tráfego apenas do security group do NLB.
 
 O link de aprovação de orçamento enviado por e-mail aponta para o gateway, não para a
 aplicação: `SERVICETRACK_API_BASE_URL` vem de `/servicetrack/<env>/api/base-url` no SSM, que
-recebe o domínio customizado quando existe e o endpoint `execute-api` caso contrário. Em PRD
-com domínio o link é estável; em HML ele muda a cada recriação do ambiente. A validação do JWT fica no backend
-por padrão, e opcionalmente também na borda (`enable_jwt_authorizer`). O endpoint
-pode ser publicado em domínio próprio com base path `/service-track/v1`
-(`custom_domain`).
+recebe o endpoint `execute-api` do ambiente. **Essa URL muda a cada recriação**, nos dois
+ambientes — links de e-mail gerados antes de um `destroy` deixam de resolver.
 
-O DNS do domínio próprio fica numa hosted zone Route53 **persistente**
-(`iac/bootstrap/dns`), fora do state dos ambientes: o alvo do API Gateway muda a
-cada recriação, então a zona precisa sobreviver ao `destroy` para que o alias seja
-refeito sem passo manual. A delegação no Registro.br é feita uma única vez.
+A validação do JWT fica no backend por padrão, e opcionalmente também na borda
+(`enable_jwt_authorizer`).
+
+> **Domínio próprio foi removido** (`ADR-008`, revogada). Não é requisito do Tech Challenge e
+> o passo de delegação no Registro.br não tem API, o que o tornava trabalho manual recorrente
+> numa conta que é recriada.
 
 Antes de qualquer `apply` que altere o contrato:
 
@@ -375,8 +371,7 @@ Toda a operação de **infraestrutura** é feita pelas esteiras do GitHub Action
 | **Contract** | automática, em push/PR que toca o contrato ou os módulos do gateway |
 | **Terraform** | manual — `plan`, `apply` ou `destroy` de um ambiente |
 | **Deploy image (bump)** | disparada pelo repo da API — atualiza a tag da imagem |
-| **DNS (zona persistente)** | manual — uma vez, para criar a hosted zone |
-| **DNS (publicar dominio em PRD)** | manual — depois de configurar o Registro.br |
+| **Bootstrap do state** | manual — uma vez por conta AWS, antes de tudo |
 
 ---
 
@@ -443,7 +438,7 @@ qualquer coisa.
 
 ### Deploy de HML
 
-HML é o ambiente enxuto: **sem domínio próprio, sem LoadBalancer do ArgoCD e sem
+HML é o ambiente enxuto: **sem LoadBalancer do ArgoCD e sem
 métricas detalhadas do CloudWatch**, para liberar orçamento para observabilidade.
 
 **Pré-requisitos:**
@@ -457,7 +452,6 @@ métricas detalhadas do CloudWatch**, para liberar orçamento para observabilida
    - `action`: `apply`
    - `env`: `hml`
    - `lambda_image_tag`: tag da imagem no ECR (ou `bootstrap` na primeira vez)
-   - `custom_domain`: irrelevante em HML, é ignorado
 2. Acompanhe o run. O apply executa sozinho as três fases da Lambda
    (ECR → imagem placeholder → stack completo) e, ao final, roda o contract test.
 3. No **summary** do run estão a URL da API e o comando para ler as API keys.
@@ -477,99 +471,26 @@ kubectl -n argocd port-forward svc/argocd-server 8080:80
 
 ### Deploy de PRD
 
-PRD é o único ambiente que usa o domínio `clausilva.com.br`.
+Mesma sequência de HML, trocando `env` para `prd`:
 
-**Pré-requisitos:**
+1. **Network** → `apply` · `env: prd`
+2. `service-track-db-infra` → **Terraform** → `apply` · `env: prd`
+3. **Terraform** → `apply` · `env: prd` · `lambda_image_tag: bootstrap` no primeiro apply
+4. `service-track-lambda` → **CD** · `env: prd`
+5. `service-track-api` → **CD - App** · `env: prd`
 
-1. Secrets da AWS renovados.
-2. Segredos da aplicação e da Lambda (ver [Secrets e credenciais](#secrets-e-credenciais)).
-3. **DNS configurado** — só na primeira vez, ou se a hosted zone for recriada.
-   Detalhado na próxima seção.
+PRD difere de HML em: `t3.medium` no node group, HPA de 2 a 4, LoadBalancer do ArgoCD ligado,
+WAF habilitado, RDS Multi-AZ com backup de 7 dias e limiares de alerta mais apertados.
 
-Com o DNS já delegado, o deploy é igual ao de HML:
-
-1. **Actions → Terraform → Run workflow**
-   - `action`: `apply`
-   - `env`: `prd`
-   - `custom_domain`: `auto` (padrão) — liga o domínio se a delegação já existir
-2. Ao final, a API responde em
-   `https://api.clausilva.com.br/service-track/v1`.
-
-`custom_domain` aceita ainda `off` (força sem domínio, útil para subir rápido) e
-`on` (força com domínio; falha se a delegação não existir).
-
----
-
-### Configuração do DNS de PRD (uma única vez)
-
-O Registro.br **não expõe API** para gerenciar a zona, então esta parte não tem
-como ser automatizada. Por isso ela vive em esteiras separadas e só precisa ser
-feita uma vez.
-
-O motivo de existir uma zona Route53 no meio: o API Gateway publica um alvo
-`d-<aleatório>.execute-api...` **regerado a cada recriação de PRD**. Com o DNS
-apenas no Registro.br, cada `destroy`/`apply` exigiria editar o registro à mão.
-Com a zona no Route53, o Terraform refaz o alias sozinho.
-
-**Passo 1 — criar a zona**
-
-**Actions → DNS (zona persistente) → Run workflow**
-- `action`: `apply`
-- `registered_domain`: `clausilva.com.br`
-- `subdomain`: `api`
-
-O summary do run imprime os quatro name servers.
-
-**Passo 2 — delegar no Registro.br** *(manual)*
-
-Em **registro.br → Painel → clausilva.com.br → DNS**, no **modo avançado**,
-adicione uma entrada por name server:
-
-| TIPO | NOME | DADOS |
-|---|---|---|
-| NS | `api` | `ns-xxx.awsdns-xx.com` |
-| NS | `api` | `ns-xxx.awsdns-xx.net` |
-| NS | `api` | `ns-xxx.awsdns-xx.org` |
-| NS | `api` | `ns-xxx.awsdns-xx.co.uk` |
-
-Clique em **SALVAR ALTERAÇÕES**.
-
-> Delegue apenas o subdomínio `api`. **Não** delegue o apex `clausilva.com.br`:
-> os registros MX, SPF e DKIM do e-mail (Resend/SES) ficam no Registro.br e
-> parariam de responder.
-
-Confirme a propagação (leva de minutos a horas):
-
-```bash
-dig +short NS api.clausilva.com.br
-```
-
-Deve responder os quatro NS da AWS. Enquanto responder vazio, ainda não propagou.
-
-**Passo 3 — publicar o domínio**
-
-**Actions → DNS (publicar dominio em PRD) → Run workflow**
-
-Essa esteira confere a delegação, emite o certificado ACM, cria o domínio e o
-alias, e roda o contract test contra a URL final. Se a delegação ainda não
-estiver ativa, ela para com erro claro em vez de pendurar até o timeout do ACM.
-
-**Pronto.** A partir daí o Registro.br não é mais tocado: os próximos applies de
-PRD detectam a delegação sozinhos (`custom_domain: auto`) e mantêm o domínio,
-mesmo depois de `destroy` + `apply`.
-
-> **Nunca** rode a esteira DNS com intenção de destruir a zona. Perder a zona
-> significa refazer a delegação no Registro.br e esperar a propagação de novo.
-
----
+A API é servida pelo endpoint `execute-api` nos dois ambientes.
 
 ### Destruir um ambiente
 
 **Actions → Terraform → Run workflow** com `action: destroy` e o `env` desejado.
 A esteira limpa antes os LoadBalancers órfãos criados pelo Kubernetes.
 
-A hosted zone **não** é destruída: ela vive em outro state
-(`servicetrack/bootstrap-dns`).
+O bucket de state **não** é destruído: ele guarda os states de todos os ambientes e é
+pré-requisito da próxima recriação. Ver a esteira **Bootstrap do state**.
 
 ## Pré-requisitos
 
@@ -653,7 +574,6 @@ aws eks update-kubeconfig --name servicetrack-prd --region us-east-1
 | Memória da Lambda  | 512 MB        | 1024 MB        |
 | VPC CIDR           | `10.10.0.0/16`| `10.20.0.0/16` |
 | State (key S3)     | `servicetrack/hml` | `servicetrack/prd` |
-| Domínio próprio    | não           | `api.clausilva.com.br` |
 | LoadBalancer do ArgoCD | não (port-forward) | sim |
 | Métricas detalhadas do API Gateway | não | não |
 | Retenção de log do gateway | 3 dias | 14 dias |
@@ -665,7 +585,7 @@ aws eks update-kubeconfig --name servicetrack-prd --region us-east-1
 |---|---|---|
 | Métricas detalhadas do API Gateway desligadas | até ~US$ 100/mês | métricas agregadas por stage continuam, e são grátis |
 | ArgoCD sem LoadBalancer | ~US$ 16/mês | acesso por `kubectl port-forward` |
-| Sem domínio próprio | ~US$ 0 direto | URL do `execute-api` muda a cada recriação |
+| Sem domínio próprio | ~US$ 0,50/mês de hosted zone evitado | URL do `execute-api` muda a cada recriação |
 | Retenção de log 7 → 3 dias | centavos | menos janela de investigação |
 
 Métrica detalhada é cobrada como métrica customizada do CloudWatch
@@ -691,7 +611,6 @@ Destruir HML quando não estiver em uso é o corte mais eficaz de todos.
 | `api_gateway_id` | ID do REST API |
 | `api_consumers` | Consumidores habilitados, cada um com sua API key |
 | `api_key_values` | Mapa consumidor → API key, para o header `x-api-key` (sensível) |
-| `api_custom_domain_url` | URL no domínio customizado, se habilitado |
 | `app_backend_nlb_dns` | DNS do NLB interno que expõe a aplicação do EKS |
 | `argocd_url` | URL do ArgoCD (se exposto) |
 | `argocd_admin_password_cmd` | Comando para obter a senha inicial do admin |
@@ -704,7 +623,6 @@ terraform output api_gateway_url
 terraform output -json api_key_values | jq -r .web
 ```
 
-Habilitando o domínio customizado (`custom_domain`), a URL passa a ser estável.
 
 ## Configuração da Lambda de autenticação
 

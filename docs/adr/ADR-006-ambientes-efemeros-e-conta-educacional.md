@@ -102,7 +102,7 @@ Com logs desligados, `logging_level` vai para `OFF` e `data_trace_enabled` para
 | Sem cache de stage | cache do API Gateway | cobrado por hora, por GB |
 | Sem X-Ray | tracing distribuído | custo por trace |
 | `detailedMetrics: false` em PRD | métrica por método | cobrada por métrica; a API tem 49 operações |
-| Sem domínio customizado | Route53 + ACM | zona hospedada tem custo mensal e o domínio não existe |
+| Sem domínio customizado | Route53 + ACM | removido de vez em `ADR-008` (revogada): delegação no Registro.br não tem API |
 | Retenção de log 7d (hml) / 14d (prd) | retenção indefinida | CloudWatch cobra por GB armazenado |
 | Sem Secrets Manager para a API key | segredo gerenciado | cobrado por segredo/mês |
 

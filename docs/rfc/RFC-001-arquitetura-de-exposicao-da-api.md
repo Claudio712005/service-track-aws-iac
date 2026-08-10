@@ -9,7 +9,6 @@
   [005](../adr/ADR-005-autorizacao-jwt-no-backend.md),
   [006](../adr/ADR-006-ambientes-efemeros-e-conta-educacional.md),
   [007](../adr/ADR-007-lambda-authorizer-opcional.md),
-  [008](../adr/ADR-008-dominio-customizado-opcional.md),
   [009](../adr/ADR-009-multiplas-api-keys-por-consumidor.md),
   [010](../adr/ADR-010-contract-testing-na-pipeline.md)
 
@@ -143,8 +142,6 @@ Muda a cada recriação (por design, não por limitação):
 - o **ID da API**, logo a URL — output `api_gateway_url`;
 - o **valor das API keys** — output `api_key_values`, um por consumidor
   ([ADR-006](../adr/ADR-006-ambientes-efemeros-e-conta-educacional.md), seção 3).
-  Com domínio customizado ([ADR-008](../adr/ADR-008-dominio-customizado-opcional.md))
-  a URL deixa de mudar;
 - o **DNS do NLB** — resolvido automaticamente, pois é injetado no contrato no
   momento do apply.
 
@@ -164,7 +161,7 @@ Muda a cada recriação (por design, não por limitação):
 
 | Item | Estado | ADR |
 |---|---|---|
-| Domínio customizado com base path `/service-track/v1` | opcional, default desligado | [008](../adr/ADR-008-dominio-customizado-opcional.md) |
+| Domínio customizado | **removido** em 02/08/2026 | [008](../adr/ADR-008-dominio-customizado-opcional.md), revogada |
 | Múltiplas API keys, uma por consumidor | ativo | [009](../adr/ADR-009-multiplas-api-keys-por-consumidor.md) |
 | Lambda authorizer de JWT na borda | opcional, default desligado | [007](../adr/ADR-007-lambda-authorizer-opcional.md) |
 | Contract testing na pipeline | ativo (estático em push, dinâmico pós-apply) | [010](../adr/ADR-010-contract-testing-na-pipeline.md) |
@@ -174,8 +171,6 @@ Muda a cada recriação (por design, não por limitação):
 - **Contract testing provider × consumer de verdade**: comparar o `openApi.yaml`
   com o contrato gerado pela aplicação no EKS. Depende de a aplicação publicar seu
   OpenAPI num local estável — hoje ele vive em outro repositório.
-- **Fechar o endpoint `execute-api`** quando o domínio customizado estiver ativo,
-  via resource policy, para ter um único ponto de entrada.
 - **WAF** se a API passar a receber tráfego real não confiável.
 - **Chave estável entre recriações** (Secrets Manager) se algum consumidor não
   puder reconfigurar a API key a cada ambiente novo.
