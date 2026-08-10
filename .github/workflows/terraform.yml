@@ -349,6 +349,13 @@ jobs:
             echo "| Cluster EKS | $(terraform -chdir=$WD output -raw cluster_name 2>/dev/null || echo '-') |"
             echo "| ECR Lambda | $(terraform -chdir=$WD output -raw lambda_ecr_repository_url 2>/dev/null || echo '-') |"
             echo "| RDS | $(terraform -chdir=$WD output -raw rds_endpoint 2>/dev/null || echo '-') |"
+            echo "| Lambda de autenticacao | $(terraform -chdir=$WD output -raw lambda_function_name 2>/dev/null || echo '-') |"
+            ARGO_URL="$(terraform -chdir=$WD output -raw argocd_url 2>/dev/null || echo '')"
+            if [ -n "$ARGO_URL" ]; then
+              echo "| ArgoCD | $ARGO_URL |"
+            else
+              echo "| ArgoCD | sem LoadBalancer neste ambiente, use port-forward |"
+            fi
             DOMAIN_URL="$(terraform -chdir=$WD output -raw api_custom_domain_url 2>/dev/null || echo '')"
             [ -n "$DOMAIN_URL" ] && echo "| Dominio customizado | $DOMAIN_URL |"
             echo ""
@@ -356,6 +363,18 @@ jobs:
             echo ""
             echo '```bash'
             echo "cd $WD && terraform output -json api_key_values | jq -r .web"
+            echo '```'
+            echo ""
+            echo "Acesso ao cluster e ao ArgoCD:"
+            echo ""
+            echo '```bash'
+            terraform -chdir=$WD output -raw configure_kubectl 2>/dev/null || true
+            echo ""
+            terraform -chdir=$WD output -raw argocd_admin_password_cmd 2>/dev/null || true
+            echo ""
+            if [ -z "$ARGO_URL" ]; then
+              echo "kubectl -n argocd port-forward svc/argocd-server 8081:80"
+            fi
             echo '```'
 
             if [ "${{ inputs.env }}" = "prd" ] && [ "${{ steps.domain.outputs.enable }}" != "true" ]; then
