@@ -8,6 +8,9 @@ resources:
 - hpa.yaml
 - service-nodeport.yaml
 
+components:
+- ../../components/db-init
+
 images:
 - name: servicetrack-api
   newName: 123124496645.dkr.ecr.us-east-1.amazonaws.com/servicetrack-prd-app

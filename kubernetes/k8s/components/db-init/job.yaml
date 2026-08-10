@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: service-track-db-init
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: service-track-db-init
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-init
+          image: postgres:16-alpine
+          command: ["bash", "/scripts/01-init-roles.sh"]
+          envFrom:
+            - secretRef:
+                name: db-init-creds
+          env:
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: db-init-creds
+                  key: POSTGRES_HOST
+            - name: PGPORT
+              valueFrom:
+                secretKeyRef:
+                  name: db-init-creds
+                  key: POSTGRES_PORT
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-init-creds
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: db-init-script
