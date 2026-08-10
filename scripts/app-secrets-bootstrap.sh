@@ -42,6 +42,8 @@ APP_USER="$(fetch db/roles/app/usuario || true)"
 APP_PASS="$(fetch db/roles/app/senha || true)"
 FLYWAY_USER="$(fetch db/roles/flyway/usuario || true)"
 FLYWAY_PASS="$(fetch db/roles/flyway/senha || true)"
+READONLY_USER="$(fetch db/roles/readonly/usuario || true)"
+READONLY_PASS="$(fetch db/roles/readonly/senha || true)"
 
 if [ -z "$APP_PASS" ] || [ -z "$FLYWAY_PASS" ]; then
   echo "!! credenciais de role ausentes em $PREFIX/db/roles/" >&2
@@ -62,7 +64,12 @@ RESEND_API_KEY=$RESEND
 EOF
 apply_secret service-track-secret --from-env-file="$WORKDIR/app.env"
 
+DB_HOST="$(fetch db/endpoint || true)"
+DB_PORTA="$(fetch db/port || true)"
+
 cat > "$WORKDIR/db-init.env" <<EOF
+POSTGRES_HOST=$DB_HOST
+POSTGRES_PORT=${DB_PORTA:-5432}
 POSTGRES_USER=$DB_MASTER_USER
 POSTGRES_PASSWORD=$DB_MASTER_PASS
 POSTGRES_DB=$DB_NOME
@@ -70,6 +77,8 @@ APP_DB_USER=$APP_USER
 APP_DB_PASSWORD=$APP_PASS
 FLYWAY_DB_USER=$FLYWAY_USER
 FLYWAY_DB_PASSWORD=$FLYWAY_PASS
+READONLY_DB_USER=$READONLY_USER
+READONLY_DB_PASSWORD=$READONLY_PASS
 EOF
 apply_secret db-init-creds --from-env-file="$WORKDIR/db-init.env"
 
