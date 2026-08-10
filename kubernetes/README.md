@@ -22,6 +22,7 @@ kubernetes/
 │   └── bootstrap/                                instala o Argo no kind (dev)
 ├── k8s/
 │   ├── base/                                     Deployment, Service ClusterIP, namespace
+│   ├── components/db-init/                       Job de roles do banco (hook PreSync do Argo)
 │   └── overlays/
 │       ├── hml/    NodePort 30080 + imagem do ECR (servicetrack-hml-app)
 │       ├── prod/   NodePort 30080 + HPA + imagem do ECR (servicetrack-prd-app)

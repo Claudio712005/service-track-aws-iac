@@ -150,3 +150,36 @@ vez ao preparar o ambiente local. Produção não usa estas chaves: lá o secret
 Os formatos gerados são PKCS#8 (`BEGIN PRIVATE KEY`) e SPKI (`BEGIN PUBLIC KEY`) — os que o
 SmallRye JWT do Quarkus lê por padrão. Gerar em PKCS#1 faz a aplicação subir e falhar só na
 primeira validação de token.
+
+---
+
+## Roles do banco: hook de PreSync do ArgoCD
+
+As roles de runtime são criadas por um Job em `kubernetes/k8s/components/db-init/`, incluído
+pelos overlays `hml` e `prod` como componente Kustomize. Não é um recurso comum: leva
+`argocd.argoproj.io/hook: PreSync`, então roda **antes** do Deployment sincronizar, e a sync
+falha se ele falhar. É o que garante que `flyway_user` exista antes do Flyway subir.
+
+**Por que o ConfigMap do script também é hook.** Recursos comuns só são aplicados na fase de
+sync, que acontece depois dos hooks de PreSync. Se o ConfigMap não fosse hook, o Job subiria
+antes dele existir e montaria um volume vazio. Os dois são `PreSync`, com `sync-wave` 0 para o
+ConfigMap e 1 para o Job.
+
+**`disableNameSuffixHash` neste gerador.** O Kustomize acrescenta hash ao nome do ConfigMap por
+padrão, o que serve para forçar restart de pod quando a config muda. Aqui o consumidor é um Job
+recriado a cada sync, então o hash não agrega — e o nome fixo `db-init-script` é o que a lista
+de recursos órfãos do AppProject já referencia.
+
+**`hook-delete-policy: BeforeHookCreation`.** Job é imutável: reaplicar um com spec diferente
+falha. Apagar o anterior antes de criar o novo é o que permite alterar o script sem erro de
+campo imutável.
+
+**Por que não roda do laptop.** O RDS é `publicly_accessible = false` e o security group dele só
+aceita os nodes do EKS e a Lambda. Um `psql` de fora da VPC não alcança — daí o Job rodar dentro
+do cluster. O `service-track-db-infra/scripts/aplicar-roles.sh` faz o mesmo trabalho, mas só
+funciona de dentro da VPC.
+
+**O host vem do secret.** `db-init-creds` é criado no apply por `scripts/app-secrets-bootstrap.sh`
+a partir do SSM, e carrega `POSTGRES_HOST` e `POSTGRES_PORT` além das credenciais. O Job mapeia
+esses valores para `PGHOST`, `PGPORT` e `PGPASSWORD`, que é o que o `psql` lê.
+
