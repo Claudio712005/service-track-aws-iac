@@ -387,10 +387,30 @@ banco precisa da VPC para nascer, e este stack precisa do banco (`DB-ADR-003`).
 
 | # | Repositório | Esteira | O quê |
 |---|---|---|---|
+| 0 | este | `scripts/bootstrap-tfstate.sh` | bucket S3 do state — **uma vez por conta AWS** |
 | 1 | este | **Network** → `apply` | VPC e subnets |
 | 2 | `service-track-db-infra` | **Terraform** → `apply` | RDS, parameter group, SSM |
 | 3 | este | **Terraform** → `apply` | EKS, Lambda, gateway, ingress no SG do banco |
-| 4 | `service-track-db-infra` | `scripts/aplicar-roles.sh` | roles `flyway_user` e `app_user` |
+| 4 | — | hook `PreSync` do ArgoCD | extensões e roles do banco, automático |
+
+### Fase 0 — o bucket de state
+
+Todas as esteiras dos dois repositórios usam o mesmo backend S3. Sem ele, o `terraform init`
+falha com `S3 bucket ... does not exist` antes de qualquer plano.
+
+```bash
+scripts/bootstrap-tfstate.sh
+```
+
+O script é idempotente: cria o bucket com versionamento, criptografia e bloqueio de acesso
+público, ou apenas confirma que já existe.
+
+O nome do bucket carrega o **ID da conta** e está fixado em 12 lugares entre este repositório e
+o `service-track-db-infra`. Se a conta do laboratório for recriada com outro ID, o script
+detecta e imprime o comando de substituição — rode-o antes de qualquer apply.
+
+**Este bucket sobrevive ao `destroy` dos ambientes, de propósito.** Só desaparece se a conta
+for resetada.
 
 A esteira **Terraform** confere as fases 1 e 2 antes de começar e falha com mensagem
 explícita apontando o que rodar antes, em vez de quebrar com erro de atributo inexistente.
@@ -706,6 +726,14 @@ balancers antes do destroy, bootstrap e seed do app no EKS, demo de HPA). Alguns
 assumem um layout de monorepo (`infra/terraform`, `infra/k8s`,
 `software/service-track-api`) diferente deste repositório; ajuste os caminhos antes
 de usá-los.
+
+| Script | Quando |
+|---|---|
+| `bootstrap-tfstate.sh` | **antes de tudo**, uma vez por conta AWS — cria o bucket S3 do state |
+| `aws-lb-cleanup.sh` | **antes de todo `destroy`** — remove ELB/ENI órfãos que travam a VPC |
+| `gen-local-jwt-keys.sh` | ao preparar o ambiente local (kind) |
+| `validate-openapi.sh` | antes de qualquer apply que altere o contrato |
+| `contract-test.sh` | após o apply, valida a API publicada |
 
 ## Destruição
 
