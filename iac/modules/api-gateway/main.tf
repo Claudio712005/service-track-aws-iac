@@ -93,29 +93,6 @@ locals {
     if !contains(keys(local.dedicated_consumers), name)
   }
 
-  domain             = var.custom_domain
-  create_domain      = var.custom_domain != null
-  create_certificate = var.custom_domain != null && try(var.custom_domain.certificate_arn, null) == null
-
-  lookup_zone = (
-    var.custom_domain != null &&
-    try(var.custom_domain.hosted_zone_name, null) != null &&
-    try(var.custom_domain.hosted_zone_id, null) == null
-  )
-
-  create_dns = var.custom_domain != null && (
-    try(var.custom_domain.hosted_zone_id, null) != null ||
-    try(var.custom_domain.hosted_zone_name, null) != null
-  )
-
-  zone_id = local.lookup_zone ? try(data.aws_route53_zone.this[0].zone_id, null) : try(var.custom_domain.hosted_zone_id, null)
-}
-
-data "aws_route53_zone" "this" {
-  count = local.lookup_zone ? 1 : 0
-
-  name         = var.custom_domain.hosted_zone_name
-  private_zone = false
 }
 
 resource "aws_api_gateway_rest_api" "this" {
@@ -315,81 +292,6 @@ resource "aws_lambda_permission" "authorizer" {
   function_name = var.authorizer_function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.this.execution_arn}/authorizers/*"
-}
-
-resource "aws_acm_certificate" "this" {
-  count = local.create_certificate ? 1 : 0
-
-  domain_name       = local.domain.domain_name
-  validation_method = "DNS"
-
-  tags = var.tags
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-resource "aws_route53_record" "cert_validation" {
-  for_each = local.create_certificate && local.create_dns ? {
-    for opt in aws_acm_certificate.this[0].domain_validation_options :
-    opt.domain_name => opt
-  } : {}
-
-  zone_id         = local.zone_id
-  name            = each.value.resource_record_name
-  type            = each.value.resource_record_type
-  records         = [each.value.resource_record_value]
-  ttl             = 60
-  allow_overwrite = true
-}
-
-resource "aws_acm_certificate_validation" "this" {
-  count = local.create_certificate ? 1 : 0
-
-  certificate_arn         = aws_acm_certificate.this[0].arn
-  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
-}
-
-resource "aws_api_gateway_domain_name" "this" {
-  count = local.create_domain ? 1 : 0
-
-  domain_name = local.domain.domain_name
-  regional_certificate_arn = (
-    local.create_certificate
-    ? aws_acm_certificate_validation.this[0].certificate_arn
-    : local.domain.certificate_arn
-  )
-  security_policy = "TLS_1_2"
-
-  endpoint_configuration {
-    types = ["REGIONAL"]
-  }
-
-  tags = var.tags
-}
-
-resource "aws_api_gateway_base_path_mapping" "this" {
-  count = local.create_domain ? 1 : 0
-
-  api_id      = aws_api_gateway_rest_api.this.id
-  stage_name  = aws_api_gateway_stage.this.stage_name
-  domain_name = aws_api_gateway_domain_name.this[0].domain_name
-  base_path   = local.domain.base_path
-}
-
-resource "aws_route53_record" "api" {
-  count = local.create_dns ? 1 : 0
-
-  zone_id = local.zone_id
-  name    = local.domain.domain_name
-  type    = "A"
-
-  alias {
-    name                   = aws_api_gateway_domain_name.this[0].regional_domain_name
-    zone_id                = aws_api_gateway_domain_name.this[0].regional_zone_id
-    evaluate_target_health = false
-  }
 }
 
 resource "aws_wafv2_web_acl" "this" {

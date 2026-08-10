@@ -1,3 +1,0 @@
-aws_region        = "us-east-1"
-registered_domain = "clausilva.com.br"
-subdomain         = "api"

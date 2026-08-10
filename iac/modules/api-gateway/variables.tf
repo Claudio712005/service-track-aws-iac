@@ -85,39 +85,6 @@ variable "authorizer_result_ttl_seconds" {
   default     = 300
 }
 
-variable "custom_domain" {
-  description = <<-EOT
-    Dominio customizado da API. Quando null, a API responde apenas pelo endpoint
-    execute-api. Quando definido, cria o domain name regional e o base path
-    mapping, expondo https://<domain_name>/<base_path>.
-
-    Informe a hosted zone (por hosted_zone_name ou hosted_zone_id) para emitir o
-    certificado via ACM com validacao DNS e criar o alias A automaticamente.
-    Alternativamente, certificate_arn reusa um certificado ja existente.
-
-    A zona deve ser persistente -- criada por iac/bootstrap/dns e nunca destruida
-    junto com o ambiente. Ver ADR-008.
-  EOT
-  type = object({
-    domain_name      = string
-    base_path        = optional(string, "service-track/v1")
-    hosted_zone_id   = optional(string)
-    hosted_zone_name = optional(string)
-    certificate_arn  = optional(string)
-  })
-  default = null
-
-  validation {
-    condition = (
-      var.custom_domain == null ||
-      try(var.custom_domain.certificate_arn, null) != null ||
-      try(var.custom_domain.hosted_zone_id, null) != null ||
-      try(var.custom_domain.hosted_zone_name, null) != null
-    )
-    error_message = "custom_domain exige hosted_zone_name, hosted_zone_id ou certificate_arn."
-  }
-}
-
 variable "gateway_shared_secret" {
   description = "Segredo injetado pelo gateway no header x-origem-gateway. A aplicacao recusa requisicao sem ele."
   type        = string

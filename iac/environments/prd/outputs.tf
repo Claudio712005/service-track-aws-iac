@@ -48,14 +48,6 @@ output "api_key_ids" {
   value = module.stack.api_key_ids
 }
 
-output "api_custom_domain_url" {
-  value = module.stack.api_custom_domain_url
-}
-
-output "api_custom_domain_target" {
-  value = module.stack.api_custom_domain_target
-}
-
 output "app_backend_nlb_dns" {
   value = module.stack.app_backend_nlb_dns
 }

@@ -138,18 +138,6 @@ variable "authorizer_result_ttl_seconds" {
   default     = 300
 }
 
-variable "custom_domain" {
-  description = "Dominio customizado da API. Ver iac/modules/api-gateway/variables.tf."
-  type = object({
-    domain_name      = string
-    base_path        = optional(string, "service-track/v1")
-    hosted_zone_id   = optional(string)
-    hosted_zone_name = optional(string)
-    certificate_arn  = optional(string)
-  })
-  default = null
-}
-
 variable "bootstrap_argocd_apps" {
   description = "Aplica o AppProject e o app-of-apps do ArgoCD no apply (GitOps). Exige kubectl e aws CLI na maquina que aplica."
   type        = bool

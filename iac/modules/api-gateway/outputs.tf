@@ -35,21 +35,3 @@ output "dedicated_usage_plan_ids" {
   description = "Usage plans dedicados, por consumidor que declarou limites proprios."
   value       = { for name, plan in aws_api_gateway_usage_plan.dedicated : name => plan.id }
 }
-
-output "custom_domain_url" {
-  description = "URL pela qual a API responde no dominio customizado, se habilitado."
-  value = (
-    local.create_domain
-    ? "https://${aws_api_gateway_domain_name.this[0].domain_name}/${local.domain.base_path}"
-    : null
-  )
-}
-
-output "custom_domain_target" {
-  description = "Alvo regional do dominio, para apontar o DNS manualmente quando hosted_zone_id nao e informado."
-  value = (
-    local.create_domain
-    ? aws_api_gateway_domain_name.this[0].regional_domain_name
-    : null
-  )
-}

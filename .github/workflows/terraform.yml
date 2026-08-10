@@ -27,15 +27,6 @@ on:
         required: false
         type: string
         default: latest
-      custom_domain:
-        description: "Dominio customizado (so PRD). auto = liga se a delegacao NS ja existir"
-        required: false
-        type: choice
-        default: auto
-        options:
-          - auto
-          - "on"
-          - "off"
 
 permissions:
   contents: read
@@ -149,31 +140,11 @@ jobs:
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
 
-      - name: Resolver dominio customizado
-        id: domain
-        run: |
-          if [ "${{ inputs.env }}" != "prd" ]; then
-            echo "applicable=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "applicable=true" >> "$GITHUB_OUTPUT"
-          sudo apt-get update -qq && sudo apt-get install -y -qq dnsutils
-          eval "$(bash scripts/dns-zone-state.sh)"
-          case "${{ inputs.custom_domain }}" in
-            "on")  ENABLE=true ;;
-            "off") ENABLE=false ;;
-            *)     ENABLE=$DELEGATED ;;
-          esac
-          echo "enable=$ENABLE" >> "$GITHUB_OUTPUT"
-
       - name: terraform plan
         id: plan
         run: |
           EXTRA=()
           if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
-          if [ "${{ steps.domain.outputs.applicable }}" = "true" ]; then
-            EXTRA+=("-var=enable_custom_domain=${{ steps.domain.outputs.enable }}")
-          fi
           terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color \
             -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" \
             -out=tfplan.bin | tee plan.txt
@@ -243,34 +214,6 @@ jobs:
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
 
-      - name: Resolver dominio customizado
-        id: domain
-        run: |
-          if [ "${{ inputs.env }}" != "prd" ]; then
-            echo "enable=false" >> "$GITHUB_OUTPUT"
-            echo "applicable=false" >> "$GITHUB_OUTPUT"
-            echo "HML nao usa dominio customizado."
-            exit 0
-          fi
-          echo "applicable=true" >> "$GITHUB_OUTPUT"
-
-          sudo apt-get update -qq && sudo apt-get install -y -qq dnsutils
-          eval "$(bash scripts/dns-zone-state.sh)"
-          {
-            echo "zone=$ZONE_NAME"
-            echo "zone_exists=$ZONE_EXISTS"
-            echo "delegated=$DELEGATED"
-            echo "ns<<EOF"; printf '%s\n' $NAME_SERVERS; echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-          case "${{ inputs.custom_domain }}" in
-            "on")  ENABLE=true ;;
-            "off") ENABLE=false ;;
-            *)     ENABLE=$DELEGATED ;;
-          esac
-          echo "enable=$ENABLE" >> "$GITHUB_OUTPUT"
-          echo "dominio customizado: $ENABLE (zona=$ZONE_EXISTS delegada=$DELEGATED)"
-
       - name: Conferir pre-requisitos de rede e banco
         run: |
           ENV="${{ inputs.env }}"
@@ -310,9 +253,6 @@ jobs:
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           EXTRA=()
-          if [ "${{ steps.domain.outputs.applicable }}" = "true" ]; then
-            EXTRA+=("-var=enable_custom_domain=${{ steps.domain.outputs.enable }}")
-          fi
           terraform -chdir=$WD apply -no-color -auto-approve \
             -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" "${EXTRA[@]}"
 
@@ -356,8 +296,6 @@ jobs:
             else
               echo "| ArgoCD | sem LoadBalancer neste ambiente, use port-forward |"
             fi
-            DOMAIN_URL="$(terraform -chdir=$WD output -raw api_custom_domain_url 2>/dev/null || echo '')"
-            [ -n "$DOMAIN_URL" ] && echo "| Dominio customizado | $DOMAIN_URL |"
             echo ""
             echo "Chaves de API (uma por consumidor):"
             echo ""
@@ -377,48 +315,6 @@ jobs:
             fi
             echo '```'
 
-            if [ "${{ inputs.env }}" = "prd" ] && [ "${{ steps.domain.outputs.enable }}" != "true" ]; then
-              echo ""
-              echo "---"
-              echo ""
-              echo "## Acao manual pendente — dominio de PRD"
-              echo ""
-              echo "PRD subiu no endpoint \`execute-api\`, cuja URL **muda a cada recriacao**."
-              echo "Para publicar em dominio proprio falta um passo que nao da para automatizar:"
-              echo "o Registro.br nao expoe API para gerenciar a zona."
-              echo ""
-
-              if [ "${{ steps.domain.outputs.zone_exists }}" != "true" ]; then
-                echo "**1. A hosted zone ainda nao existe.**"
-                echo ""
-                echo "Rode a esteira **DNS (zona persistente)** com \`action: apply\`."
-                echo "Ela imprime os name servers a cadastrar."
-              else
-                echo "**1. Cadastre estes NS no Registro.br** (uma unica vez):"
-                echo ""
-                echo "registro.br > Painel > clausilva.com.br > DNS > modo avancado"
-                echo ""
-                echo "| TIPO | NOME | DADOS |"
-                echo "|---|---|---|"
-                while read -r ns; do
-                  [ -n "$ns" ] && echo "| NS | \`api\` | \`$ns\` |"
-                done <<< "${{ steps.domain.outputs.ns }}"
-                echo ""
-                echo "> Nao delegue o apice: os registros MX/SPF/DKIM de e-mail"
-                echo "> continuam no Registro.br e parariam de responder."
-                echo ""
-                echo "**2. Aguarde a propagacao** e confirme:"
-                echo ""
-                echo '```bash'
-                echo "dig +short NS ${{ steps.domain.outputs.zone }}"
-                echo '```'
-              fi
-              echo ""
-              echo "**3. Execute a esteira \`DNS (publicar dominio em PRD)\`.**"
-              echo ""
-              echo "Depois disso este passo nao se repete: os proximos applies detectam"
-              echo "a delegacao sozinhos e mantem o dominio."
-            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   destroy:

@@ -204,7 +204,7 @@ resource "aws_ssm_parameter" "gateway_shared_secret" {
 resource "aws_ssm_parameter" "api_base_url" {
   name  = "/${var.project}/${var.environment}/api/base-url"
   type  = "String"
-  value = coalesce(module.api_gateway.custom_domain_url, module.api_gateway.api_endpoint)
+  value = module.api_gateway.api_endpoint
   tags  = local.tags
 }
 
@@ -353,7 +353,6 @@ module "api_gateway" {
   authorizer_function_name      = var.enable_jwt_authorizer ? module.jwt_authorizer[0].function_name : null
   authorizer_result_ttl_seconds = var.authorizer_result_ttl_seconds
 
-  custom_domain = var.custom_domain
 
   enable_access_logs  = var.enable_api_access_logs
   cloudwatch_role_arn = data.aws_iam_role.lab.arn

@@ -70,16 +70,6 @@ output "api_key_ids" {
   value = module.api_gateway.api_key_ids
 }
 
-output "api_custom_domain_url" {
-  description = "URL no dominio customizado, se habilitado."
-  value       = module.api_gateway.custom_domain_url
-}
-
-output "api_custom_domain_target" {
-  description = "Alvo regional do dominio customizado, para DNS externo."
-  value       = module.api_gateway.custom_domain_target
-}
-
 output "jwt_authorizer_function_name" {
   description = "Funcao do authorizer de JWT, se habilitado."
   value       = var.enable_jwt_authorizer ? module.jwt_authorizer[0].function_name : null

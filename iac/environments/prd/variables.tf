@@ -28,34 +28,6 @@ variable "jwt_public_key" {
   sensitive   = true
 }
 
-variable "enable_custom_domain" {
-  description = <<-EOT
-    Publica a API em api.clausilva.com.br. Exige a hosted zone criada por
-    iac/bootstrap/dns E a delegacao NS ja ativa no Registro.br -- sem ela a
-    validacao do certificado ACM fica pendurada ate estourar o timeout.
-    A esteira dns-publish.yml verifica a delegacao antes de ligar.
-  EOT
-  type        = bool
-  default     = false
-}
-
-variable "api_domain_name" {
-  description = "Dominio publico da API em PRD."
-  type        = string
-  default     = "api.clausilva.com.br"
-}
-
-variable "api_hosted_zone_name" {
-  description = "Hosted zone Route53 persistente que serve o dominio."
-  type        = string
-  default     = "api.clausilva.com.br"
-}
-
-variable "api_base_path" {
-  type    = string
-  default = "service-track/v1"
-}
-
 variable "bootstrap_argocd_apps" {
   description = "Aplica o AppProject e o app-of-apps do ArgoCD no apply. Ver modules/stack."
   type        = bool
