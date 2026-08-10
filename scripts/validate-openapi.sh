@@ -77,6 +77,7 @@ fake = {
     "vpc_link_id": "abc123",
     "cors_options": json.dumps(cors_options),
     "bearer_auth_scheme": json.dumps(bearer_auth_scheme),
+    "gateway_shared_secret": "valor-de-teste",
 }
 
 missing = set(re.findall(r"\$\{(\w+)\}", raw)) - set(fake)
