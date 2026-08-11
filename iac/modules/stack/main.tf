@@ -94,9 +94,9 @@ locals {
   public_subnet_ids  = data.terraform_remote_state.network.outputs.public_subnet_ids
   vpc_cidr           = data.terraform_remote_state.network.outputs.vpc_cidr
 
-  db_endpoint = data.aws_ssm_parameter.db_endpoint.value
-  db_port     = data.aws_ssm_parameter.db_port.value
-  db_name     = data.aws_ssm_parameter.db_name.value
+  db_endpoint = nonsensitive(data.aws_ssm_parameter.db_endpoint.value)
+  db_port     = nonsensitive(data.aws_ssm_parameter.db_port.value)
+  db_name     = nonsensitive(data.aws_ssm_parameter.db_name.value)
   db_username = data.aws_ssm_parameter.db_username.value
   db_password = data.aws_ssm_parameter.db_password.value
   db_sg_id    = data.aws_ssm_parameter.db_security_group_id.value
@@ -142,12 +142,14 @@ module "app_secrets" {
 
   params = merge(
     {
-      "jwt-private"         = local.jwt_private_key_pem
-      "jwt-public"          = local.jwt_public_key_pem
+      "jwt-private" = local.jwt_private_key_pem
+      "jwt-public"  = local.jwt_public_key_pem
+    },
+    { for k, v in {
       "unsplash-access-key" = var.unsplash_access_key
       "resend-api-key"      = var.resend_api_key
-    },
-    var.app_secret_params,
+    } : k => v if trimspace(v) != "" },
+    { for k, v in var.app_secret_params : k => v if trimspace(v) != "" },
   )
 }
 
