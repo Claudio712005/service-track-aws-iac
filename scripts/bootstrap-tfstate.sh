@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REGIAO="${AWS_REGION:-us-east-1}"
-ESPERADO="123124496645"
+ESPERADO="821146464895"
 
 log() { echo ">> $*"; }
 erro() { echo "!! $*" >&2; }
