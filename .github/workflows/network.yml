@@ -58,11 +58,17 @@ jobs:
         run: terraform init -input=false
 
       - name: terraform plan
-        run: terraform plan -input=false -out=plano
+        run: |
+          if ! terraform plan -input=false -lock-timeout=10m -out=plano; then
+            echo "::error::Se a falha acima for 'Error acquiring the state lock', o lock ficou"
+            echo "::error::de uma execucao morta. Rode a esteira 'Destravar state' com"
+            echo "::error::state=servicetrack/${{ inputs.env }}-network, depois repita esta."
+            exit 1
+          fi
 
       - name: apply
         if: inputs.action == 'apply'
-        run: terraform apply -input=false -auto-approve plano
+        run: terraform apply -input=false -lock-timeout=10m -auto-approve plano
 
       - name: Destruir exige que banco e stack ja tenham saido
         if: inputs.action == 'destroy'
@@ -72,7 +78,7 @@ jobs:
 
       - name: destroy
         if: inputs.action == 'destroy'
-        run: terraform destroy -input=false -auto-approve
+        run: terraform destroy -input=false -lock-timeout=10m -auto-approve
 
       - name: Resumo
         if: inputs.action == 'apply'

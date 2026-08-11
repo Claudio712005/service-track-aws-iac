@@ -27,6 +27,10 @@ permissions:
 env:
   AWS_REGION: us-east-1
 
+concurrency:
+  group: unlock-${{ inputs.state }}
+  cancel-in-progress: false
+
 jobs:
   destravar:
     name: Remove o lock do state

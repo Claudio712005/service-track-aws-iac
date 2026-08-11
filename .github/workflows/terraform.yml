@@ -145,9 +145,10 @@ jobs:
         run: |
           EXTRA=()
           if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
-          terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color \
+          terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color -lock-timeout=10m \
             -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" \
             -out=tfplan.bin | tee plan.txt
+          exit "${PIPESTATUS[0]}"
 
       - name: Publicar plano (artefato)
         uses: actions/upload-artifact@v4
@@ -239,7 +240,7 @@ jobs:
       - name: Apply fase 1 — ECR
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
-          terraform -chdir=$WD apply -no-color -auto-approve \
+          terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m \
             -target=module.stack.module.ecr_lambda \
             -target=module.stack.module.ecr_app
 
@@ -253,7 +254,7 @@ jobs:
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           EXTRA=()
-          terraform -chdir=$WD apply -no-color -auto-approve \
+          terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m \
             -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" "${EXTRA[@]}"
 
       - name: Coletar outputs
@@ -273,6 +274,7 @@ jobs:
           KEY="$(terraform -chdir=$WD output -json api_key_values | jq -r '.ci')"
           REST_API_ID="$(terraform -chdir=$WD output -raw api_gateway_id)"
           export REST_API_ID
+          set -o pipefail
           bash scripts/contract-test.sh "$BASE" "$KEY" | tee contract.txt
 
       - name: Resumo do apply
@@ -361,7 +363,7 @@ jobs:
           path: ${{ needs.prepare.outputs.workdir }}
 
       - name: terraform destroy (aplica plano)
-        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color tfplan.bin
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color -lock-timeout=10m tfplan.bin
 
       - name: Resumo do destroy
         if: always()
