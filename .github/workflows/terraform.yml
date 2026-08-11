@@ -109,8 +109,8 @@ jobs:
             echo "- [ver job](${{ needs.prepare.outputs.run_url }})"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  plan:
-    name: "3. Plan (${{ inputs.env }})"
+  executar:
+    name: "3. ${{ inputs.action }} (${{ inputs.env }})"
     needs: [prepare, validate]
     runs-on: ubuntu-latest
     environment:
@@ -129,93 +129,26 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Configurar credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: terraform init
-        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
-
-      - name: terraform plan
-        id: plan
-        run: |
-          EXTRA=()
-          if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
-          terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color -lock-timeout=10m \
-            -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" \
-            -out=tfplan.bin | tee plan.txt
-          exit "${PIPESTATUS[0]}"
-
-      - name: Publicar plano (artefato)
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ inputs.env }}
-          path: ${{ needs.prepare.outputs.workdir }}/tfplan.bin
-          retention-days: 3
-
-      - name: Resumo do plano
-        if: always()
-        run: |
-          {
-            echo "### 3. Plan (\`${{ inputs.action }}\`)"
-            echo "- resultado: ${{ steps.plan.outcome }}"
-            echo ""
-            echo "<details><summary>Ver plano</summary>"
-            echo ""
-            echo '```'
-            tail -c 60000 plan.txt || true
-            echo '```'
-            echo ""
-            echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  apply:
-    name: "4. Apply (${{ inputs.env }})"
-    needs: [prepare, plan]
-    if: inputs.action == 'apply'
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.env }}
-      url: ${{ steps.outputs.outputs.api_url }}
-    env:
-      TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
-      TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
-      TF_VAR_datadog_notificacao: ${{ secrets.DD_NOTIFICACAO }}
-      TF_VAR_unsplash_access_key: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-      TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-
-      - name: Configurar credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
-          cache-dependency-path: iac/modules/lambda-authorizer/src/go.sum
 
-      - uses: azure/setup-kubectl@v4
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          version: "v1.30.0"
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Garantir o bucket de state
+        run: bash scripts/bootstrap-tfstate.sh
 
       - name: terraform init
-        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init -input=false
 
       - name: Conferir pre-requisitos de rede e banco
+        if: inputs.action != 'destroy'
         run: |
           ENV="${{ inputs.env }}"
           faltando=0
@@ -237,7 +170,33 @@ jobs:
           [ "$faltando" -eq 0 ] || exit 1
           echo "rede e banco de $ENV presentes."
 
+      - name: Limpar load balancers orfaos
+        if: inputs.action == 'destroy'
+        env:
+          CLUSTER_NAME: servicetrack-${{ inputs.env }}
+        run: bash scripts/aws-lb-cleanup.sh
+
+      - name: terraform plan
+        id: plan
+        if: inputs.action != 'apply'
+        run: |
+          EXTRA=()
+          if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
+          terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color -lock-timeout=10m \
+            -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" \
+            -out=tfplan.bin | tee plan.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Publicar plano (artefato)
+        if: inputs.action != 'apply'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.env }}-${{ github.run_id }}
+          path: ${{ needs.prepare.outputs.workdir }}/tfplan.bin
+          retention-days: 5
+
       - name: Apply fase 1 — ECR
+        if: inputs.action == 'apply'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m \
@@ -245,20 +204,27 @@ jobs:
             -target=module.stack.module.ecr_app
 
       - name: Seed da imagem placeholder da Lambda
+        if: inputs.action == 'apply'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           ECR_URL="$(terraform -chdir=$WD output -raw lambda_ecr_repository_url)"
           bash scripts/lambda-bootstrap-image.sh "$ECR_URL" bootstrap
 
       - name: Apply fase 3 — stack completo
+        if: inputs.action == 'apply'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           EXTRA=()
           terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m \
             -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" "${EXTRA[@]}"
 
+      - name: terraform destroy (aplica plano)
+        if: inputs.action == 'destroy'
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color -lock-timeout=10m tfplan.bin
+
       - name: Coletar outputs
         id: outputs
+        if: inputs.action == 'apply'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           API_URL="$(terraform -chdir=$WD output -raw api_gateway_url 2>/dev/null || echo '')"
@@ -266,6 +232,7 @@ jobs:
 
       - name: Contract test da API publicada
         id: contract
+        if: inputs.action == 'apply'
         env:
           STAGE_NAME: ${{ inputs.env }}
         run: |
@@ -277,8 +244,24 @@ jobs:
           set -o pipefail
           bash scripts/contract-test.sh "$BASE" "$KEY" | tee contract.txt
 
+      - name: Resumo do plano
+        if: always() && inputs.action == 'plan'
+        run: |
+          {
+            echo "### 3. Plan (\`${{ inputs.action }}\`)"
+            echo "- resultado: ${{ steps.plan.outcome }}"
+            echo ""
+            echo "<details><summary>Ver plano</summary>"
+            echo ""
+            echo '```'
+            tail -c 60000 plan.txt || true
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resumo do apply
-        if: always()
+        if: always() && inputs.action == 'apply'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           {
@@ -319,54 +302,8 @@ jobs:
 
           } >> "$GITHUB_STEP_SUMMARY"
 
-  destroy:
-    name: "4. Destroy (${{ inputs.env }})"
-    needs: [prepare, plan]
-    if: inputs.action == 'destroy'
-    runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.env }}
-    env:
-      TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
-      TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
-      TF_VAR_datadog_notificacao: ${{ secrets.DD_NOTIFICACAO }}
-      TF_VAR_unsplash_access_key: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-      TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-
-      - name: Configurar credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Limpar load balancers orfaos
-        env:
-          CLUSTER_NAME: servicetrack-${{ inputs.env }}
-        run: bash scripts/aws-lb-cleanup.sh
-
-      - name: terraform init
-        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init
-
-      - name: Baixar plano de destroy
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ inputs.env }}
-          path: ${{ needs.prepare.outputs.workdir }}
-
-      - name: terraform destroy (aplica plano)
-        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color -lock-timeout=10m tfplan.bin
-
       - name: Resumo do destroy
-        if: always()
+        if: always() && inputs.action == 'destroy'
         run: |
           {
             echo "### 4. Destroy — \`${{ inputs.env }}\`"
