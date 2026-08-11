@@ -4,7 +4,7 @@ module "stack" {
   project     = "servicetrack"
   environment = "prd"
 
-  cluster_version     = "1.30"
+  cluster_version     = ""
   node_instance_types = ["t3.medium"]
   node_desired_size   = 1
   node_min_size       = 1

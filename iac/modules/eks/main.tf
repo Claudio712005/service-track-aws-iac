@@ -1,6 +1,16 @@
+data "aws_eks_cluster_versions" "suportadas" {
+  cluster_type = "eks"
+  default_only = true
+}
+
+locals {
+  versao_padrao  = data.aws_eks_cluster_versions.suportadas.cluster_versions[0].cluster_version
+  versao_cluster = trimspace(var.cluster_version) != "" ? var.cluster_version : local.versao_padrao
+}
+
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
-  version  = var.cluster_version
+  version  = local.versao_cluster
   role_arn = var.lab_role_arn
 
   vpc_config {
