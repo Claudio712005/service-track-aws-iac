@@ -40,6 +40,19 @@ resource "helm_release" "argocd" {
     name  = "server.service.type"
     value = var.argocd_expose_lb ? "LoadBalancer" : "ClusterIP"
   }
+
+  timeout         = 900
+  wait            = true
+  cleanup_on_fail = true
+
+  depends_on = [helm_release.metrics_server]
+
+  lifecycle {
+    precondition {
+      condition     = local.node_group_ready != ""
+      error_message = "Node group ainda nao provisionado."
+    }
+  }
 }
 
 data "kubernetes_service" "argocd_server" {
