@@ -125,6 +125,8 @@ resource "datadog_monitor" "recursos_do_cluster" {
 }
 
 resource "datadog_monitor" "erros_de_integracao" {
+  count = var.habilitar_monitores_de_log ? 1 : 0
+
   name = "[${local.sufixo}] Falhas nas integracoes externas"
   type = "log alert"
 

@@ -44,3 +44,9 @@ variable "limite_uso_de_conexoes" {
   description = "Fracao do teto de conexoes do banco que dispara o alerta."
   type        = number
 }
+
+variable "habilitar_monitores_de_log" {
+  description = "Monitores do tipo log alert. Exigem Log Management ativo na organizacao do Datadog; sem ele a API recusa a criacao."
+  type        = bool
+  default     = false
+}

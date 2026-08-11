@@ -9,6 +9,6 @@ output "monitores" {
     falhas_os   = datadog_monitor.falha_no_processamento_de_os.id
     pods        = datadog_monitor.saude_dos_pods.id
     saturacao   = datadog_monitor.recursos_do_cluster.id
-    integracoes = datadog_monitor.erros_de_integracao.id
+    integracoes = one(datadog_monitor.erros_de_integracao[*].id)
   }
 }
