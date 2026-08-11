@@ -42,7 +42,8 @@ jobs:
       - name: Criar ou confirmar o bucket
         id: bucket
         run: |
-          bash scripts/bootstrap-tfstate.sh | tee /tmp/saida.txt
+          set -o pipefail
+          bash scripts/bootstrap-tfstate.sh
           CONTA="$(aws sts get-caller-identity --query Account --output text)"
           echo "conta=$CONTA" >> "$GITHUB_OUTPUT"
           echo "bucket=servicetrack-tfstate-$CONTA" >> "$GITHUB_OUTPUT"
