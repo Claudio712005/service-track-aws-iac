@@ -1,0 +1,89 @@
+name: Destravar state
+
+run-name: "Destravar ${{ inputs.state }} por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      state:
+        description: "State a destravar"
+        required: true
+        type: choice
+        options:
+          - servicetrack/hml-network
+          - servicetrack/prd-network
+          - servicetrack/hml
+          - servicetrack/prd
+          - servicetrack/hml-db
+          - servicetrack/prd-db
+      confirmo:
+        description: "Digite SIM para confirmar que nenhuma execucao esta em andamento"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  destravar:
+    name: Remove o lock do state
+    runs-on: ubuntu-latest
+    environment:
+      name: hml
+    steps:
+      - name: Confirmar intencao
+        run: |
+          if [ "${{ inputs.confirmo }}" != "SIM" ]; then
+            echo "::error::Digite SIM no campo de confirmacao."
+            echo "::error::Remover o lock de uma execucao em andamento corrompe o state."
+            exit 1
+          fi
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Remover o lock
+        id: unlock
+        run: |
+          CONTA="$(aws sts get-caller-identity --query Account --output text)"
+          BUCKET="servicetrack-tfstate-$CONTA"
+          CHAVE="${{ inputs.state }}/terraform.tfstate.tflock"
+
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "chave=$CHAVE" >> "$GITHUB_OUTPUT"
+
+          if aws s3api head-object --bucket "$BUCKET" --key "$CHAVE" >/dev/null 2>&1; then
+            aws s3api get-object --bucket "$BUCKET" --key "$CHAVE" /tmp/lock.json >/dev/null
+            echo "conteudo do lock:"
+            cat /tmp/lock.json
+            aws s3api delete-object --bucket "$BUCKET" --key "$CHAVE"
+            echo "removido=sim" >> "$GITHUB_OUTPUT"
+          else
+            echo "nenhum lock ativo em $CHAVE"
+            echo "removido=nao" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Destravar state"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| State | \`${{ inputs.state }}\` |"
+            echo "| Bucket | \`${{ steps.unlock.outputs.bucket }}\` |"
+            echo "| Lock removido | ${{ steps.unlock.outputs.removido || 'falhou antes' }} |"
+            echo ""
+            echo "O conteudo do lock aparece no log do passo anterior: mostra qual execucao"
+            echo "o criou e quando. Se for recente e de uma execucao ainda ativa, o lock era"
+            echo "legitimo e a proxima execucao pode corromper o state."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -23,6 +23,10 @@ env:
   AWS_REGION: us-east-1
   TF_VERSION: 1.10.5
 
+concurrency:
+  group: network-${{ inputs.env }}
+  cancel-in-progress: false
+
 jobs:
   network:
     name: ${{ inputs.action }} da rede de ${{ inputs.env }}
@@ -45,6 +49,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Garantir o bucket de state
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/bootstrap-tfstate.sh
 
       - name: terraform init
         run: terraform init -input=false
