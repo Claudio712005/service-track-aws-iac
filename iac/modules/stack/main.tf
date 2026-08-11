@@ -187,6 +187,7 @@ module "observability" {
   limite_erros_5xx             = var.observabilidade.limite_erros_5xx
   limite_falhas_os             = var.observabilidade.limite_falhas_os
   limite_falhas_integracao     = var.observabilidade.limite_falhas_integracao
+  habilitar_monitores_de_log   = try(var.observabilidade.habilitar_monitores_de_log, false)
   minimo_de_pods               = var.observabilidade.minimo_de_pods
   limite_saturacao             = var.observabilidade.limite_saturacao
   limite_uso_de_conexoes       = var.observabilidade.limite_uso_de_conexoes
@@ -312,6 +313,7 @@ module "vpc_link" {
   vpc_cidr               = local.vpc_cidr
   private_subnet_ids     = local.private_subnet_ids
   node_asg_names         = module.eks.node_group_asg_names
+  node_asg_count         = 1
   node_security_group_id = module.eks.cluster_security_group_id
   node_port              = var.app_node_port
   health_check_protocol  = var.app_health_check_protocol

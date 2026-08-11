@@ -73,9 +73,9 @@ resource "aws_lb_listener" "this" {
 }
 
 resource "aws_autoscaling_attachment" "nodes" {
-  for_each = toset(var.node_asg_names)
+  count = var.node_asg_count
 
-  autoscaling_group_name = each.value
+  autoscaling_group_name = var.node_asg_names[count.index]
   lb_target_group_arn    = aws_lb_target_group.this.arn
 }
 

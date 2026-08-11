@@ -57,3 +57,9 @@ variable "health_check_path" {
   type        = string
   default     = "/"
 }
+
+variable "node_asg_count" {
+  description = "Quantidade de ASGs do node group. Estatico porque for_each sobre valor conhecido so no apply quebra o plan de ambiente novo."
+  type        = number
+  default     = 1
+}
