@@ -44,6 +44,7 @@ resource "helm_release" "argocd" {
   timeout         = 900
   wait            = true
   cleanup_on_fail = true
+  replace         = true
 
   depends_on = [helm_release.metrics_server]
 
