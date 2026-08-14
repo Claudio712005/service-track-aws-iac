@@ -1,0 +1,117 @@
+name: Destruir ambiente
+
+run-name: "Destruir ${{ inputs.env }} por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options: [hml, prd]
+        default: hml
+      escopo:
+        description: "O que destruir"
+        required: true
+        type: choice
+        options:
+          - so-o-stack
+          - tudo
+        default: so-o-stack
+      confirmo:
+        description: "Digite o nome do ambiente para confirmar"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orquestracao-${{ inputs.env }}
+  cancel-in-progress: false
+
+jobs:
+  destruir:
+    name: "Destruicao (${{ inputs.env }} / ${{ inputs.escopo }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+      AMBIENTE: ${{ inputs.env }}
+    steps:
+      - name: Confirmar intencao
+        run: |
+          if [ "${{ inputs.confirmo }}" != "${{ inputs.env }}" ]; then
+            echo "::error::Digite '${{ inputs.env }}' no campo de confirmacao."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Preparar utilitario de disparo
+        run: |
+          cat > /tmp/disparar.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          repo="$1"; wf="$2"; shift 2
+
+          marca="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "::group::$repo :: $wf $*"
+          gh workflow run "$wf" --repo "$repo" --ref main "$@"
+
+          id=""
+          for _ in $(seq 1 40); do
+            sleep 5
+            id="$(gh run list --repo "$repo" --workflow "$wf" --limit 10 \
+              --json databaseId,createdAt \
+              --jq "[.[] | select(.createdAt >= \"$marca\")] | sort_by(.createdAt) | last | .databaseId // empty")"
+            [ -n "$id" ] && break
+          done
+
+          if [ -z "$id" ]; then
+            echo "::error::nao localizei a execucao de $wf em $repo"
+            exit 1
+          fi
+
+          echo "execucao: https://github.com/$repo/actions/runs/$id"
+          gh run watch "$id" --repo "$repo" --exit-status --interval 15
+          echo "::endgroup::"
+          EOF
+          chmod +x /tmp/disparar.sh
+
+      - name: "1. Stack"
+        run: |
+          /tmp/disparar.sh Claudio712005/service-track-aws-iac terraform.yml \
+            -f action=destroy -f env="$AMBIENTE"
+
+      - name: "2. Banco"
+        if: inputs.escopo == 'tudo'
+        run: |
+          /tmp/disparar.sh Claudio712005/service-track-db-infra terraform.yml \
+            -f action=destroy -f env="$AMBIENTE"
+
+      - name: "3. Rede"
+        if: inputs.escopo == 'tudo'
+        run: |
+          /tmp/disparar.sh Claudio712005/service-track-aws-iac network.yml \
+            -f action=destroy -f env="$AMBIENTE"
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Destruicao de \`${{ inputs.env }}\`"
+            echo ""
+            echo "Escopo: **${{ inputs.escopo }}** · Resultado: **${{ job.status }}**"
+            echo ""
+            if [ "${{ inputs.escopo }}" = "so-o-stack" ]; then
+              echo "Rede e banco continuam de pe. Para retomar, rode **Subir ambiente**"
+              echo "com \`primeira_subida: true\` — as fases 1 e 2 sao idempotentes e"
+              echo "passam em segundos."
+            else
+              echo "O bucket de state nao e destruido: ele guarda o historico de todos"
+              echo "os ambientes e e pre-requisito da proxima criacao."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

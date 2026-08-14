@@ -153,6 +153,7 @@ Esta é a lista completa do que precisa existir e como criar.
 | `RESEND_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Resend |
 | `DD_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → API Keys |
 | `DD_APP_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → Application Keys |
+| `OPS_TOKEN` | GitHub → **este repo** → Repository secrets | uma vez | PAT fine-grained nos quatro repositorios, com `Actions: write`, `Secrets: write` e `Environments: read`. Usado pelas esteiras de orquestracao |
 | `DD_NOTIFICACAO` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Destino do alerta no formato do Datadog: `@voce@dominio.com` para e-mail, `@slack-canal` para Slack |
 
 **Segredo que pode ser gerado é gerado no apply** ([ADR-018](docs/adr/ADR-018-segredos-gerados-no-apply.md)).
@@ -371,6 +372,9 @@ Toda a operação de **infraestrutura** é feita pelas esteiras do GitHub Action
 | **Contract** | automática, em push/PR que toca o contrato ou os módulos do gateway |
 | **Terraform** | manual — `plan`, `apply` ou `destroy` de um ambiente |
 | **Deploy image (bump)** | disparada pelo repo da API — atualiza a tag da imagem |
+| **Credenciais AWS** | manual — a cada sessao nova do laboratorio, replica as tres secrets nos quatro repositorios |
+| **Subir ambiente** | manual — orquestra rede, banco, stack, Lambda e aplicacao na ordem |
+| **Destruir ambiente** | manual — a ordem inversa, com escopo `so-o-stack` ou `tudo` |
 | **Bootstrap do state** | manual — uma vez por conta AWS, antes de tudo |
 
 ---

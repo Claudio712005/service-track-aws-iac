@@ -1,0 +1,122 @@
+name: Subir ambiente
+
+run-name: "Subir ${{ inputs.env }} por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options: [hml, prd]
+        default: hml
+      primeira_subida:
+        description: "Ambiente novo: usa a tag bootstrap na Lambda"
+        required: true
+        type: boolean
+        default: true
+      incluir_aplicacao:
+        description: "Publicar tambem a Lambda e a aplicacao"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orquestracao-${{ inputs.env }}
+  cancel-in-progress: false
+
+jobs:
+  subir:
+    name: "Sequencia completa (${{ inputs.env }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+      AMBIENTE: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar utilitario de disparo
+        run: |
+          cat > /tmp/disparar.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          repo="$1"; wf="$2"; shift 2
+
+          marca="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "::group::$repo :: $wf $*"
+          gh workflow run "$wf" --repo "$repo" --ref main "$@"
+
+          id=""
+          for _ in $(seq 1 40); do
+            sleep 5
+            id="$(gh run list --repo "$repo" --workflow "$wf" --limit 10 \
+              --json databaseId,createdAt \
+              --jq "[.[] | select(.createdAt >= \"$marca\")] | sort_by(.createdAt) | last | .databaseId // empty")"
+            [ -n "$id" ] && break
+          done
+
+          if [ -z "$id" ]; then
+            echo "::error::nao localizei a execucao de $wf em $repo"
+            exit 1
+          fi
+
+          echo "execucao: https://github.com/$repo/actions/runs/$id"
+          gh run watch "$id" --repo "$repo" --exit-status --interval 15
+          echo "::endgroup::"
+          EOF
+          chmod +x /tmp/disparar.sh
+
+      - name: "1. Rede"
+        run: |
+          /tmp/disparar.sh Claudio712005/service-track-aws-iac network.yml \
+            -f action=apply -f env="$AMBIENTE"
+
+      - name: "2. Banco"
+        run: |
+          /tmp/disparar.sh Claudio712005/service-track-db-infra terraform.yml \
+            -f action=apply -f env="$AMBIENTE"
+
+      - name: "3. Stack"
+        run: |
+          TAG=latest
+          if [ "${{ inputs.primeira_subida }}" = "true" ]; then TAG=bootstrap; fi
+          /tmp/disparar.sh Claudio712005/service-track-aws-iac terraform.yml \
+            -f action=apply -f env="$AMBIENTE" -f lambda_image_tag="$TAG"
+
+      - name: "4. Lambda"
+        if: inputs.incluir_aplicacao
+        run: |
+          /tmp/disparar.sh Claudio712005/service-track-lambda cd.yml \
+            -f env="$AMBIENTE"
+
+      - name: "5. Aplicacao"
+        if: inputs.incluir_aplicacao
+        run: |
+          /tmp/disparar.sh Claudio712005/service-track-api cd-app.yml \
+            -f env="$AMBIENTE"
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Subida de \`${{ inputs.env }}\`"
+            echo ""
+            echo "Resultado: **${{ job.status }}**"
+            echo ""
+            echo "Cada fase aparece como um grupo no log, com link direto para a"
+            echo "execucao no repositorio de origem."
+            echo ""
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "Ambiente de pe. A URL da API e a do ArgoCD estao no resumo da fase 3,"
+              echo "no repositorio service-track-aws-iac."
+            else
+              echo "A sequencia parou na primeira falha. Corrija e rode de novo:"
+              echo "as fases ja concluidas sao idempotentes."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

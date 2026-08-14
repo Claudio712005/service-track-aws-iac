@@ -1,0 +1,106 @@
+name: Credenciais AWS
+
+run-name: "Propagar credenciais AWS por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: credenciais-aws
+  cancel-in-progress: false
+
+jobs:
+  propagar:
+    name: Replica as credenciais nos quatro repositorios
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+      REPOS: >-
+        Claudio712005/service-track-aws-iac
+        Claudio712005/service-track-db-infra
+        Claudio712005/service-track-lambda
+        Claudio712005/service-track-api
+    steps:
+      - name: Conferir a origem
+        run: |
+          : "${{ secrets.OPS_TOKEN }}"
+          for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::$v vazia neste repositorio. Defina as tres em"
+              echo "::error::Settings > Secrets and variables > Actions > Repository secrets."
+              exit 1
+            fi
+          done
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Validar as credenciais antes de espalhar
+        id: conta
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_REGION: us-east-1
+        run: |
+          if ! CONTA="$(aws sts get-caller-identity --query Account --output text 2>&1)"; then
+            echo "::error::As credenciais nao autenticam. Renove no laboratorio antes de propagar."
+            echo "$CONTA"
+            exit 1
+          fi
+          echo "conta=$CONTA" >> "$GITHUB_OUTPUT"
+          echo "autenticado na conta $CONTA"
+
+      - name: Propagar
+        id: propagar
+        env:
+          VAL_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          VAL_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          VAL_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          set -o pipefail
+          total=0
+          for repo in $REPOS; do
+            echo "::group::$repo"
+            gh secret set AWS_ACCESS_KEY_ID     --repo "$repo" --body "$VAL_ID"
+            gh secret set AWS_SECRET_ACCESS_KEY --repo "$repo" --body "$VAL_SECRET"
+            gh secret set AWS_SESSION_TOKEN     --repo "$repo" --body "$VAL_TOKEN"
+            echo "nivel de repositorio: ok"
+            total=$((total + 3))
+
+            for amb in hml prd; do
+              if gh api "repos/$repo/environments/$amb" >/dev/null 2>&1; then
+                gh secret set AWS_ACCESS_KEY_ID     --repo "$repo" --env "$amb" --body "$VAL_ID"
+                gh secret set AWS_SECRET_ACCESS_KEY --repo "$repo" --env "$amb" --body "$VAL_SECRET"
+                gh secret set AWS_SESSION_TOKEN     --repo "$repo" --env "$amb" --body "$VAL_TOKEN"
+                echo "environment $amb: ok"
+                total=$((total + 3))
+              else
+                echo "environment $amb: nao existe, ignorado"
+              fi
+            done
+            echo "::endgroup::"
+          done
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Credenciais AWS"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Conta | \`${{ steps.conta.outputs.conta }}\` |"
+            echo "| Secrets gravadas | ${{ steps.propagar.outputs.total || 0 }} |"
+            echo "| Resultado | ${{ steps.propagar.outcome }} |"
+            echo ""
+            if [ "${{ steps.propagar.outcome }}" = "success" ]; then
+              echo "As quatro esteiras podem rodar. Refaca esta propagacao a cada"
+              echo "sessao nova do laboratorio."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
