@@ -52,10 +52,15 @@ docs/
   api-gateway/     Guia tecnico e operacional do gateway
 
 .github/workflows/
-  network.yml        Aplica a rede do ambiente (manual) - primeira fase
-  contract.yml       Valida contrato + authorizer + fmt/validate (push e PR)
-  terraform.yml      plan / apply / destroy por ambiente (manual)
-  bootstrap-state.yml Cria o bucket S3 do state (manual, uma vez por conta)
+  credenciais-aws.yml  Replica as credenciais da AWS nos quatro repositorios
+  subir-ambiente.yml   Orquestra rede, banco, stack, Lambda e aplicacao na ordem
+  destruir-ambiente.yml Ordem inversa, com escopo so-o-stack ou tudo
+  network.yml          Aplica a rede do ambiente (manual) - primeira fase
+  terraform.yml        plan / apply / destroy por ambiente (manual)
+  bootstrap-state.yml  Cria o bucket S3 do state (manual, uma vez por conta)
+  unlock-state.yml     Remove lock orfao de um state
+  contract.yml         Valida contrato + authorizer + fmt/validate (push e PR)
+  deploy-image.yml     Recebe image-published da API e reescreve a tag do overlay
 ```
 
 Cada ambiente é um root module fino: configura os providers, define o backend S3
@@ -147,7 +152,7 @@ Esta é a lista completa do que precisa existir e como criar.
 
 | Segredo | Onde vive | Quando criar | Origem |
 |---|---|---|---|
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | GitHub → **este repo** → Environments `hml` e `prd` | a cada laboratório | AWS Academy → AWS Details → AWS CLI |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | GitHub → **este repo** → **Repository secrets** | a cada laboratório | AWS Academy → AWS Details → AWS CLI. Depois rode a esteira **Credenciais AWS**, que replica nos quatro repositórios |
 | `IAC_REPO_TOKEN` | GitHub → **repo da API** → Secrets | uma vez | PAT fino / GitHub App, `contents: write` só neste repo |
 | `UNSPLASH_ACCESS_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Unsplash |
 | `RESEND_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Resend |
