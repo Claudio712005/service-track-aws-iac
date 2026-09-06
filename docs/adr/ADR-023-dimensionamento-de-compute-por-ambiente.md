@@ -3,6 +3,8 @@
 - **Status:** aceito
 - **Data:** 2026-07-31
 - **Revisado em:** 2026-08-02 — PRD redimensionado para a apresentação da Fase 3
+- **Revisado em:** 2026-09-02 — HML passa a `t3.medium`: o orçamento de pods abaixo não
+  contava o ArgoCD, e o cluster não cabia em `t3.small`
 - **Origem:** [RFC-006](../rfc/RFC-006-dimensionamento-de-compute.md)
 
 ## Contexto
@@ -12,7 +14,7 @@ muda é o node group:
 
 | | HML | PRD |
 |---|---|---|
-| `node_instance_types` | `t3.small` | `t3.medium` |
+| `node_instance_types` | `t3.medium` | `t3.medium` |
 | `node_desired_size` | 1 | 1 |
 | `node_min_size` | 1 | 1 |
 | `node_max_size` | 1 | 2 |
@@ -46,9 +48,16 @@ Fórmula do VPC CNI: `ENIs × (IPv4 por ENI − 1) + 2`.
 
 ## Decisão
 
-### HML: um `t3.small`, sem HPA, teto de 1 node
+### HML: um `t3.medium`, sem HPA, teto de 1 node
 
-Um `t3.small` entrega 11 slots de pod. O que já ocupa esses slots antes da aplicação:
+> **Correção de 02/09/2026.** A tabela abaixo dizia `t3.small` e omitia o ArgoCD, que o módulo
+> `addons` instala por padrão — o chart completo sobe application-controller, applicationset,
+> dex, notifications, redis, repo-server e server. Com ele o subtotal passa de 7 para 14, acima
+> dos 11 slots do `t3.small`. O sintoma não foi um erro claro: o `helm_release.argocd` tem
+> `wait = true` e `timeout = 900`, então o apply ficava 15 minutos esperando pods que nunca
+> iriam agendar, e o `cleanup_on_fail` apagava o rastro antes de sair.
+
+Um `t3.medium` entrega 17 slots de pod. O que já ocupa esses slots antes da aplicação:
 
 | Ocupante | Pods |
 |---|---|
@@ -57,12 +66,16 @@ Um `t3.small` entrega 11 slots de pod. O que já ocupa esses slots antes da apli
 | `kube-proxy` | 1 |
 | `metrics-server` | 1 |
 | Datadog node agent + cluster agent | 2 |
-| **Subtotal** | **7** |
+| **ArgoCD** (chart completo) | **7** |
+| **Subtotal** | **14** |
 
-Sobram **4 slots** para a aplicação. É por isso que **HML não tem HPA**: copiar o teto de PRD
-seria ficção — a partir da quinta réplica os pods ficariam `Pending` por falta de IP, não por
-falta de CPU, e o sintoma (`0/1 nodes are available: too many pods`) não se parece nada com o
-problema. Melhor não declarar autoscaling do que declarar um que não pode ser cumprido.
+Sobram **3 slots** para a aplicação. É por isso que **HML não tem HPA**: copiar o teto de PRD
+seria ficção — os pods excedentes ficariam `Pending` por falta de IP, não por falta de CPU, e o
+sintoma (`0/1 nodes are available: too many pods`) não se parece nada com o problema. Melhor
+não declarar autoscaling do que declarar um que não pode ser cumprido.
+
+Toda peça nova de plataforma no cluster consome slot e precisa entrar nesta tabela. Foi
+exatamente essa omissão que custou dois applies de 30 minutos.
 
 Memória confirma a escolha: 2 GiB brutos menos a reserva do kubelet dão cerca de 1,6 GiB
 alocável. Com o limite de 512 MiB por pod da aplicação e 512 MiB do node agent do Datadog, 2
