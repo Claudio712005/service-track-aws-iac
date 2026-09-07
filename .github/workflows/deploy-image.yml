@@ -188,6 +188,43 @@ jobs:
             exit 1
           fi
 
+      - name: Confirmar que os pods estao saudaveis
+        run: |
+          echo "aguardando estabilizacao por 60s antes de conferir reinicios"
+          sleep 60
+
+          PRONTOS="$(kubectl -n "$NAMESPACE" get pods -l app=service-track-app \
+            -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' \
+            | grep -c true || true)"
+          REINICIOS="$(kubectl -n "$NAMESPACE" get pods -l app=service-track-app \
+            -o jsonpath='{range .items[*]}{.status.containerStatuses[0].restartCount}{"\n"}{end}' \
+            | sort -rn | head -1)"
+          REINICIOS="${REINICIOS:-0}"
+
+          echo "pods prontos: $PRONTOS | maior contagem de reinicios: $REINICIOS"
+
+          if [ "$PRONTOS" -lt 1 ]; then
+            echo "::error::Nenhum pod pronto apos o rollout."
+            kubectl -n "$NAMESPACE" get pods -l app=service-track-app -o wide || true
+            for pod in $(kubectl -n "$NAMESPACE" get pods -l app=service-track-app \
+                           -o jsonpath='{.items[*].metadata.name}'); do
+              echo "--- ultimas linhas de $pod ---"
+              kubectl -n "$NAMESPACE" logs "$pod" --previous --tail=25 2>/dev/null \
+                || kubectl -n "$NAMESPACE" logs "$pod" --tail=25 2>/dev/null || true
+            done
+            exit 1
+          fi
+
+          if [ "$REINICIOS" -gt 2 ]; then
+            echo "::error::Pod reiniciou $REINICIOS vezes: o rollout concluiu mas a aplicacao nao se sustenta."
+            for pod in $(kubectl -n "$NAMESPACE" get pods -l app=service-track-app \
+                           -o jsonpath='{.items[*].metadata.name}'); do
+              echo "--- ultimas linhas de $pod ---"
+              kubectl -n "$NAMESPACE" logs "$pod" --previous --tail=25 2>/dev/null || true
+            done
+            exit 1
+          fi
+
       - name: Resumo do rollout
         if: always()
         run: |
