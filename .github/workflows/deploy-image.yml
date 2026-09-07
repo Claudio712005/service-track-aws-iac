@@ -28,8 +28,12 @@ concurrency:
 
 jobs:
   bump:
-    name: "Bump da imagem"
+    name: "1. Bump da imagem"
     runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.in.outputs.environment }}
+      image_tag: ${{ steps.in.outputs.image_tag }}
+      changed: ${{ steps.bump.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,7 +81,7 @@ jobs:
           git commit -m "deploy(${{ steps.in.outputs.environment }}): imagem ${{ steps.in.outputs.image_tag }}"
           git push origin main
 
-      - name: Resumo
+      - name: Resumo do bump
         if: always()
         run: |
           {
@@ -91,8 +95,81 @@ jobs:
             echo "| Tag anterior | \`${{ steps.bump.outputs.previous }}\` |"
             echo ""
             if [ "${{ steps.bump.outputs.changed }}" = "true" ]; then
-              echo "Commit feito em main. O ArgoCD sincroniza a aplicacao automaticamente."
+              echo "Commit feito em main. A confirmacao do rollout roda no job seguinte."
             else
               echo "Sem mudanca de tag."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  confirmar:
+    name: "2. Confirmar o rollout"
+    needs: bump
+    if: needs.bump.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.bump.outputs.environment }}
+    env:
+      AMBIENTE: ${{ needs.bump.outputs.environment }}
+      TAG: ${{ needs.bump.outputs.image_tag }}
+      NAMESPACE: service-track
+      DEPLOYMENT: service-track-app
+    steps:
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Conectar ao cluster
+        run: |
+          aws eks update-kubeconfig --name "servicetrack-$AMBIENTE" --region us-east-1
+          kubectl version --client=true -o yaml > /dev/null
+
+      - name: Esperar o ArgoCD propagar a tag
+        id: propagacao
+        run: |
+          echo "esperando o deployment referenciar a tag $TAG"
+          LIMITE=$(( SECONDS + 480 ))
+          while [ "$SECONDS" -lt "$LIMITE" ]; do
+            ATUAL="$(kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" \
+              -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)"
+            case "$ATUAL" in
+              *":$TAG") echo "tag propagada: $ATUAL"; exit 0 ;;
+            esac
+            echo "  ainda em: ${ATUAL:-<deployment ausente>}"
+            sleep 20
+          done
+          echo "::error::O ArgoCD nao propagou a tag $TAG em 8 minutos."
+          echo "::error::Confira a Application no ArgoCD: pode estar OutOfSync ou com erro de sync."
+          exit 1
+
+      - name: Aguardar o rollout concluir
+        run: |
+          if ! kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=300s; then
+            echo "::error::O rollout nao concluiu. Estado dos pods:"
+            kubectl -n "$NAMESPACE" get pods -l app=service-track-app -o wide || true
+            kubectl -n "$NAMESPACE" describe deployment "$DEPLOYMENT" | tail -30 || true
+            exit 1
+          fi
+
+      - name: Resumo do rollout
+        if: always()
+        run: |
+          {
+            echo "## Rollout — $AMBIENTE"
+            echo ""
+            echo "| Campo | Valor |"
+            echo "|---|---|"
+            echo "| Tag entregue | \`$TAG\` |"
+            echo "| Deployment | \`$NAMESPACE/$DEPLOYMENT\` |"
+            echo "| Resultado | ${{ job.status }} |"
+            echo ""
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "A imagem esta rodando no cluster. Este job e a evidencia de que o"
+              echo "deploy automatico chegou ao fim, e nao apenas foi disparado."
+            else
+              echo "O deploy foi disparado mas nao chegou ao fim. Ver os logs acima."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
