@@ -33,5 +33,17 @@ if [ -z "$id" ]; then
 fi
 
 echo "execucao: https://github.com/$repo/actions/runs/$id"
-gh run watch "$id" --repo "$repo" --exit-status --interval 15
+
+if gh run watch "$id" --repo "$repo" --exit-status --interval 15; then
+  echo "::endgroup::"
+  exit 0
+fi
+
 echo "::endgroup::"
+echo "::group::log dos passos que falharam em $repo :: $workflow"
+gh run view "$id" --repo "$repo" --log-failed 2>/dev/null | tail -n 200 \
+  || echo "nao consegui baixar o log; veja https://github.com/$repo/actions/runs/$id"
+echo "::endgroup::"
+
+echo "::error::$workflow falhou em $repo. Log acima; execucao: https://github.com/$repo/actions/runs/$id"
+exit 1
