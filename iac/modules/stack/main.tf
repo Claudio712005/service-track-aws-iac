@@ -222,7 +222,7 @@ resource "null_resource" "app_secrets_bootstrap" {
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/../../../scripts/app-secrets-bootstrap.sh ${module.eks.cluster_name} ${data.aws_region.current.name} ${module.app_secrets.name_prefix}"
+    command = "bash ${path.module}/../../../scripts/app-secrets-bootstrap.sh ${module.eks.cluster_name} ${data.aws_region.current.name} ${module.app_secrets.name_prefix}"
   }
 
   depends_on = [module.addons, aws_ssm_parameter.api_base_url, aws_ssm_parameter.gateway_shared_secret]
@@ -237,7 +237,7 @@ resource "null_resource" "argocd_bootstrap" {
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/../../../scripts/argocd-bootstrap-apply.sh ${module.eks.cluster_name} ${data.aws_region.current.name} ${var.environment}"
+    command = "bash ${path.module}/../../../scripts/argocd-bootstrap-apply.sh ${module.eks.cluster_name} ${data.aws_region.current.name} ${var.environment}"
   }
 
   depends_on = [module.addons, null_resource.app_secrets_bootstrap]
