@@ -1,6 +1,6 @@
 name: Destruir ambiente
 
-run-name: "Destruir ${{ inputs.env }} por @${{ github.actor }}"
+run-name: "Destruir ${{ inputs.env }} (${{ inputs.escopo }}) por @${{ github.actor }}"
 
 on:
   workflow_dispatch:
@@ -31,80 +31,82 @@ concurrency:
   group: orquestracao-${{ inputs.env }}
   cancel-in-progress: false
 
+env:
+  IAC: Claudio712005/service-track-aws-iac
+  DB: Claudio712005/service-track-db-infra
+
 jobs:
-  destruir:
-    name: "Destruicao (${{ inputs.env }} / ${{ inputs.escopo }})"
+  confirmar:
+    name: "0. Confirmar a intencao"
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-      AMBIENTE: ${{ inputs.env }}
     steps:
-      - name: Confirmar intencao
+      - name: Conferir o nome digitado
         run: |
           if [ "${{ inputs.confirmo }}" != "${{ inputs.env }}" ]; then
             echo "::error::Digite '${{ inputs.env }}' no campo de confirmacao."
             exit 1
           fi
+          echo "confirmado: ${{ inputs.env }} / ${{ inputs.escopo }}"
 
+  stack:
+    name: "1. Stack"
+    needs: confirmar
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
       - uses: actions/checkout@v4
+      - run: |
+          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
+            -f action=destroy -f env="${{ inputs.env }}" -f camada=stack
 
-      - name: Preparar utilitario de disparo
-        run: |
-          cat > /tmp/disparar.sh <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
+  banco:
+    name: "2. Banco"
+    needs: stack
+    if: inputs.escopo == 'tudo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash scripts/disparar-workflow.sh "$DB" terraform.yml \
+            -f action=destroy -f env="${{ inputs.env }}"
 
-          repo="$1"; wf="$2"; shift 2
+  rede:
+    name: "3. Rede"
+    needs: banco
+    if: inputs.escopo == 'tudo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
+            -f action=destroy -f env="${{ inputs.env }}" -f camada=rede
 
-          marca="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "::group::$repo :: $wf $*"
-          gh workflow run "$wf" --repo "$repo" --ref main "$@"
-
-          id=""
-          for _ in $(seq 1 40); do
-            sleep 5
-            id="$(gh run list --repo "$repo" --workflow "$wf" --limit 10 \
-              --json databaseId,createdAt \
-              --jq "[.[] | select(.createdAt >= \"$marca\")] | sort_by(.createdAt) | last | .databaseId // empty")"
-            [ -n "$id" ] && break
-          done
-
-          if [ -z "$id" ]; then
-            echo "::error::nao localizei a execucao de $wf em $repo"
-            exit 1
-          fi
-
-          echo "execucao: https://github.com/$repo/actions/runs/$id"
-          gh run watch "$id" --repo "$repo" --exit-status --interval 15
-          echo "::endgroup::"
-          EOF
-          chmod +x /tmp/disparar.sh
-
-      - name: "1. Stack"
-        run: |
-          /tmp/disparar.sh Claudio712005/service-track-aws-iac terraform.yml \
-            -f action=destroy -f env="$AMBIENTE"
-
-      - name: "2. Banco"
-        if: inputs.escopo == 'tudo'
-        run: |
-          /tmp/disparar.sh Claudio712005/service-track-db-infra terraform.yml \
-            -f action=destroy -f env="$AMBIENTE"
-
-      - name: "3. Rede"
-        if: inputs.escopo == 'tudo'
-        run: |
-          /tmp/disparar.sh Claudio712005/service-track-aws-iac network.yml \
-            -f action=destroy -f env="$AMBIENTE"
-
-      - name: Resumo
-        if: always()
+  resumo:
+    name: "Resumo"
+    needs: [stack, banco, rede]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consolidar
         run: |
           {
             echo "### Destruicao de \`${{ inputs.env }}\`"
             echo ""
-            echo "Escopo: **${{ inputs.escopo }}** · Resultado: **${{ job.status }}**"
+            echo "Escopo: **${{ inputs.escopo }}**"
+            echo ""
+            echo "| Fase | Resultado |"
+            echo "|---|---|"
+            echo "| 1. Stack | ${{ needs.stack.result }} |"
+            echo "| 2. Banco | ${{ needs.banco.result }} |"
+            echo "| 3. Rede | ${{ needs.rede.result }} |"
             echo ""
             if [ "${{ inputs.escopo }}" = "so-o-stack" ]; then
               echo "Rede e banco continuam de pe. Para retomar, rode **Subir ambiente**"
@@ -113,5 +115,7 @@ jobs:
             else
               echo "O bucket de state nao e destruido: ele guarda o historico de todos"
               echo "os ambientes e e pre-requisito da proxima criacao."
+              echo ""
+              echo "A hosted zone do Route53 vive em state separado e nao foi tocada."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

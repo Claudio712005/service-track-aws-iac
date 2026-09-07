@@ -13,12 +13,12 @@ on:
         default: hml
       primeira_subida:
         description: "Ambiente novo: usa a tag bootstrap na Lambda"
-        required: true
+        required: false
         type: boolean
-        default: true
+        default: false
       incluir_aplicacao:
         description: "Publicar tambem a Lambda e a aplicacao"
-        required: true
+        required: false
         type: boolean
         default: true
 
@@ -29,94 +29,106 @@ concurrency:
   group: orquestracao-${{ inputs.env }}
   cancel-in-progress: false
 
+env:
+  IAC: Claudio712005/service-track-aws-iac
+  DB: Claudio712005/service-track-db-infra
+  LAMBDA: Claudio712005/service-track-lambda
+  API: Claudio712005/service-track-api
+
 jobs:
-  subir:
-    name: "Sequencia completa (${{ inputs.env }})"
+  rede:
+    name: "1. Rede"
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-      AMBIENTE: ${{ inputs.env }}
     steps:
       - uses: actions/checkout@v4
+      - run: |
+          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
+            -f action=apply -f env="${{ inputs.env }}" -f camada=rede
 
-      - name: Preparar utilitario de disparo
-        run: |
-          cat > /tmp/disparar.sh <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
+  banco:
+    name: "2. Banco"
+    needs: rede
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash scripts/disparar-workflow.sh "$DB" terraform.yml \
+            -f action=apply -f env="${{ inputs.env }}"
 
-          repo="$1"; wf="$2"; shift 2
-
-          marca="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "::group::$repo :: $wf $*"
-          gh workflow run "$wf" --repo "$repo" --ref main "$@"
-
-          id=""
-          for _ in $(seq 1 40); do
-            sleep 5
-            id="$(gh run list --repo "$repo" --workflow "$wf" --limit 10 \
-              --json databaseId,createdAt \
-              --jq "[.[] | select(.createdAt >= \"$marca\")] | sort_by(.createdAt) | last | .databaseId // empty")"
-            [ -n "$id" ] && break
-          done
-
-          if [ -z "$id" ]; then
-            echo "::error::nao localizei a execucao de $wf em $repo"
-            exit 1
-          fi
-
-          echo "execucao: https://github.com/$repo/actions/runs/$id"
-          gh run watch "$id" --repo "$repo" --exit-status --interval 15
-          echo "::endgroup::"
-          EOF
-          chmod +x /tmp/disparar.sh
-
-      - name: "1. Rede"
-        run: |
-          /tmp/disparar.sh Claudio712005/service-track-aws-iac network.yml \
-            -f action=apply -f env="$AMBIENTE"
-
-      - name: "2. Banco"
-        run: |
-          /tmp/disparar.sh Claudio712005/service-track-db-infra terraform.yml \
-            -f action=apply -f env="$AMBIENTE"
-
-      - name: "3. Stack"
-        run: |
+  stack:
+    name: "3. Stack"
+    needs: banco
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
           TAG=latest
           if [ "${{ inputs.primeira_subida }}" = "true" ]; then TAG=bootstrap; fi
-          /tmp/disparar.sh Claudio712005/service-track-aws-iac terraform.yml \
-            -f action=apply -f env="$AMBIENTE" -f lambda_image_tag="$TAG"
+          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
+            -f action=apply -f env="${{ inputs.env }}" -f camada=stack \
+            -f lambda_image_tag="$TAG"
 
-      - name: "4. Lambda"
-        if: inputs.incluir_aplicacao
-        run: |
-          /tmp/disparar.sh Claudio712005/service-track-lambda cd.yml \
-            -f env="$AMBIENTE"
+  lambda:
+    name: "4. Lambda"
+    needs: stack
+    if: inputs.incluir_aplicacao
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash scripts/disparar-workflow.sh "$LAMBDA" cd.yml \
+            -f env="${{ inputs.env }}"
 
-      - name: "5. Aplicacao"
-        if: inputs.incluir_aplicacao
-        run: |
-          /tmp/disparar.sh Claudio712005/service-track-api cd-app.yml \
-            -f env="$AMBIENTE"
+  aplicacao:
+    name: "5. Aplicacao"
+    needs: lambda
+    if: inputs.incluir_aplicacao
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash scripts/disparar-workflow.sh "$API" cd-app.yml \
+            -f env="${{ inputs.env }}"
 
-      - name: Resumo
-        if: always()
+  resumo:
+    name: "Resumo"
+    needs: [rede, banco, stack, lambda, aplicacao]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consolidar
         run: |
           {
             echo "### Subida de \`${{ inputs.env }}\`"
             echo ""
-            echo "Resultado: **${{ job.status }}**"
+            echo "| Fase | Resultado |"
+            echo "|---|---|"
+            echo "| 1. Rede | ${{ needs.rede.result }} |"
+            echo "| 2. Banco | ${{ needs.banco.result }} |"
+            echo "| 3. Stack | ${{ needs.stack.result }} |"
+            echo "| 4. Lambda | ${{ needs.lambda.result }} |"
+            echo "| 5. Aplicacao | ${{ needs.aplicacao.result }} |"
             echo ""
-            echo "Cada fase aparece como um grupo no log, com link direto para a"
-            echo "execucao no repositorio de origem."
-            echo ""
-            if [ "${{ job.status }}" = "success" ]; then
-              echo "Ambiente de pe. A URL da API e a do ArgoCD estao no resumo da fase 3,"
-              echo "no repositorio service-track-aws-iac."
+            if [ "${{ needs.aplicacao.result }}" = "success" ]; then
+              echo "Ambiente de pe. A URL da API e a do ArgoCD estao no resumo da fase 3."
             else
-              echo "A sequencia parou na primeira falha. Corrija e rode de novo:"
-              echo "as fases ja concluidas sao idempotentes."
+              echo "A sequencia parou na primeira falha. Cada fase e um job: reexecute"
+              echo "apenas a que falhou pelo botao de re-run do GitHub, ou rode tudo de"
+              echo "novo — as fases concluidas sao idempotentes."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
