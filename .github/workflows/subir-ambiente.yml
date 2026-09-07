@@ -110,7 +110,26 @@ jobs:
     needs: [rede, banco, stack, lambda, aplicacao]
     if: always()
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
     steps:
+      - name: Configurar credenciais AWS
+        if: needs.stack.result == 'success'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Ler os enderecos do ambiente
+        id: enderecos
+        if: needs.stack.result == 'success'
+        run: |
+          URL="$(aws ssm get-parameter --name "/servicetrack/${{ inputs.env }}/api/base-url" \
+            --query Parameter.Value --output text 2>/dev/null || echo '')"
+          echo "api_url=$URL" >> "$GITHUB_OUTPUT"
+
       - name: Consolidar
         run: |
           {
@@ -125,7 +144,34 @@ jobs:
             echo "| 5. Aplicacao | ${{ needs.aplicacao.result }} |"
             echo ""
             if [ "${{ needs.aplicacao.result }}" = "success" ]; then
-              echo "Ambiente de pe. A URL da API e a do ArgoCD estao no resumo da fase 3."
+              echo "### Ambiente de pe"
+              echo ""
+              URL="${{ steps.enderecos.outputs.api_url }}"
+              if [ -n "$URL" ]; then
+                echo "| Endereco | Valor |"
+                echo "|---|---|"
+                echo "| API | $URL |"
+                echo "| Login | \`POST $URL/autenticacao\` |"
+                echo ""
+                echo "A chave de API muda a cada recriacao. Para ler:"
+                echo ""
+                echo '```bash'
+                echo "cd iac/environments/${{ inputs.env }}"
+                echo "terraform output -json api_key_values | jq -r .web"
+                echo '```'
+                echo ""
+                echo "Teste rapido, trocando CHAVE pelo valor acima:"
+                echo ""
+                echo '```bash'
+                echo "curl -s -X POST \"$URL/autenticacao\" \\"
+                echo "  -H 'x-api-key: CHAVE' -H 'Content-Type: application/json' \\"
+                echo "  -d '{\"cpf\":\"13646633093\",\"senha\":\"SENHA_DO_SEED\"}'"
+                echo '```'
+              else
+                echo "Nao consegui ler a URL do SSM. Ela esta no resumo da fase 3."
+              fi
+              echo ""
+              echo "Demais enderecos (ArgoCD, RDS, ECR) no resumo da fase 3."
             else
               echo "A sequencia parou na primeira falha. Cada fase e um job: reexecute"
               echo "apenas a que falhou pelo botao de re-run do GitHub, ou rode tudo de"
