@@ -14,6 +14,11 @@ output "lambda_ecr_repository_url" {
   value = module.stack.lambda_ecr_repository_url
 }
 
+output "lambda_function_name" {
+  description = "Funcao de autenticacao. Nao tem URL propria: e invocada pelo gateway em POST /autenticacao."
+  value       = module.stack.lambda_function_name
+}
+
 output "rds_endpoint" {
   value = module.stack.rds_endpoint
 }
