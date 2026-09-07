@@ -30,6 +30,8 @@ jobs:
   bump:
     name: "1. Bump da imagem"
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.client_payload.environment || inputs.environment }}
     outputs:
       environment: ${{ steps.in.outputs.environment }}
       image_tag: ${{ steps.in.outputs.image_tag }}
@@ -57,20 +59,42 @@ jobs:
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "file=kubernetes/k8s/overlays/$ENVIRONMENT/kustomization.yaml" >> "$GITHUB_OUTPUT"
 
-      - name: Atualizar a tag
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Atualizar registro e tag
         id: bump
         run: |
           FILE="${{ steps.in.outputs.file }}"
           TAG="${{ steps.in.outputs.image_tag }}"
-          CURRENT="$(grep -E '^  newTag:' "$FILE" | awk '{print $2}')"
-          if [ "$CURRENT" = "$TAG" ]; then
+          ENV="${{ steps.in.outputs.environment }}"
+
+          CONTA="$(aws sts get-caller-identity --query Account --output text)"
+          REGISTRO="$CONTA.dkr.ecr.us-east-1.amazonaws.com/servicetrack-$ENV-app"
+
+          TAG_ATUAL="$(grep -E '^  newTag:' "$FILE" | awk '{print $2}')"
+          NOME_ATUAL="$(grep -E '^  newName:' "$FILE" | awk '{print $2}')"
+
+          if [ "$TAG_ATUAL" = "$TAG" ] && [ "$NOME_ATUAL" = "$REGISTRO" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Tag ja e $TAG; nada a fazer."
+            echo "Registro e tag ja estao corretos; nada a fazer."
             exit 0
           fi
+
+          if [ "$NOME_ATUAL" != "$REGISTRO" ]; then
+            echo "::warning::O registro do overlay apontava para $NOME_ATUAL."
+            echo "::warning::A conta atual e $CONTA; corrigindo para $REGISTRO."
+          fi
+
+          sed -i -E "s|^  newName: .*|  newName: $REGISTRO|" "$FILE"
           sed -i -E "s|^  newTag: .*|  newTag: $TAG|" "$FILE"
           echo "changed=true" >> "$GITHUB_OUTPUT"
-          echo "previous=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "previous=$TAG_ATUAL" >> "$GITHUB_OUTPUT"
 
       - name: Commit e push
         if: steps.bump.outputs.changed == 'true'
@@ -150,7 +174,17 @@ jobs:
           if ! kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=300s; then
             echo "::error::O rollout nao concluiu. Estado dos pods:"
             kubectl -n "$NAMESPACE" get pods -l app=service-track-app -o wide || true
-            kubectl -n "$NAMESPACE" describe deployment "$DEPLOYMENT" | tail -30 || true
+
+            echo "imagem que o deployment pede:"
+            kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" \
+              -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}' || true
+
+            for pod in $(kubectl -n "$NAMESPACE" get pods -l app=service-track-app \
+                           -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+              echo "--- eventos de $pod ---"
+              kubectl -n "$NAMESPACE" describe pod "$pod" \
+                | sed -n '/^Events:/,$p' | tail -15 || true
+            done
             exit 1
           fi
 
