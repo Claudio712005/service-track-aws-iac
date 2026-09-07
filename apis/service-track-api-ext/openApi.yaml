@@ -19,9 +19,6 @@ servers:
       enum:
       - hml
       - prd
-security:
-- ApiKeyAuth: []
-
 x-amazon-apigateway-api-key-source: HEADER
 
 x-amazon-apigateway-request-validators:
