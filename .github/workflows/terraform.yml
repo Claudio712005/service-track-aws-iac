@@ -118,7 +118,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   rede:
-    name: "3. ${{ inputs.action }} da rede (${{ inputs.env }})"
+    name: "3. Rede"
     needs: [prepare, validate]
     if: inputs.camada == 'rede'
     runs-on: ubuntu-latest
@@ -178,7 +178,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   executar:
-    name: "3. ${{ inputs.action }} do stack (${{ inputs.env }})"
+    name: "3. Stack"
     if: inputs.camada == 'stack'
     needs: [prepare, validate]
     runs-on: ubuntu-latest
