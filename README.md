@@ -153,12 +153,11 @@ Esta é a lista completa do que precisa existir e como criar.
 | Segredo | Onde vive | Quando criar | Origem |
 |---|---|---|---|
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | GitHub → **este repo** → **Repository secrets** | a cada laboratório | AWS Academy → AWS Details → AWS CLI. Depois rode a esteira **Credenciais AWS**, que replica nos quatro repositórios |
-| `IAC_REPO_TOKEN` | GitHub → **repo da API** → Secrets | uma vez | PAT fino / GitHub App, `contents: write` só neste repo |
+| `OPS_TOKEN` | GitHub → **os quatro repos** → Repository secrets | uma vez | PAT fine-grained nos quatro repositórios. Permissões na seção 2 abaixo |
 | `UNSPLASH_ACCESS_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Unsplash |
 | `RESEND_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Resend |
 | `DD_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → API Keys |
 | `DD_APP_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → Application Keys |
-| `OPS_TOKEN` | GitHub → **este repo** → Repository secrets | uma vez | PAT fine-grained nos quatro repositorios, com `Actions: write`, `Secrets: write` e `Environments: read`. Usado pelas esteiras de orquestracao |
 | `DD_NOTIFICACAO` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Destino do alerta no formato do Datadog: `@voce@dominio.com` para e-mail, `@slack-canal` para Slack |
 
 **Segredo que pode ser gerado é gerado no apply** ([ADR-018](docs/adr/ADR-018-segredos-gerados-no-apply.md)).
@@ -180,17 +179,29 @@ sido aplicado antes.
 As três secrets por environment, renovadas a cada lab. Passo a passo em
 [Antes de qualquer esteira](#antes-de-qualquer-esteira-renovar-as-credenciais-da-aws).
 
-### 2. Token cross-repo (`IAC_REPO_TOKEN`)
+### 2. Token cross-repo (`OPS_TOKEN`)
 
-Usado pelo repo da API para disparar o bump de imagem neste repo (ver
-[Repositório da API](#repositório-da-api-cd-da-imagem)).
+Uma credencial só para toda integração entre repositórios: orquestração de ambiente,
+propagação de credenciais AWS, disparo do bump de imagem e acompanhamento da execução.
+Antes eram dois tokens (`OPS_TOKEN` e `IAC_REPO_TOKEN`), com duas validades e dois modos
+de falha para o mesmo sintoma — ver `GLOBAL-RFC-008`.
 
 - GitHub → **Settings → Developer settings → Fine-grained tokens**.
-- **Repository access:** apenas `service-track-aws-iac`.
-- **Permissions → Repository → Contents: Read and write**. Nada além disso.
-- Guarde no **repo da API** como secret `IAC_REPO_TOKEN`.
+- **Repository access:** os quatro repositórios do projeto.
+- **Permissions → Repository:**
 
-Se vazar, o dano máximo é um commit de bump (revertível) — não dá acesso à AWS.
+| Permissão | Nível | Quem precisa |
+|---|---|---|
+| Actions | Read and write | orquestração e o job que acompanha o deploy |
+| Contents | Read and write | `repository_dispatch` e o commit de bump do overlay |
+| Secrets | Read and write | esteira **Credenciais AWS** |
+| Environments | Read | descobrir se `hml` e `prd` existem |
+| Metadata | Read | obrigatória, marcada automaticamente |
+
+- Guarde como secret `OPS_TOKEN` em **todos os quatro repositórios** — o mesmo valor.
+
+> O token não dá acesso à AWS, mas escreve secrets nos quatro repositórios. Anote a data de
+> expiração: quando ele vence, CD e orquestração param juntos.
 
 ### 3. Chaves JWT (RS256)
 
@@ -347,12 +358,12 @@ A esteira da API precisa de:
 1. Credenciais AWS para `docker push` no ECR do ambiente
    (`servicetrack-hml-app` / `servicetrack-prd-app`).
 2. Tag da imagem = **commit SHA** (o repo ECR é `IMMUTABLE`).
-3. O secret `IAC_REPO_TOKEN` (item 2 acima) e, ao fim do push, o dispatch:
+3. O secret `OPS_TOKEN` (item 2 acima) e, ao fim do push, o dispatch:
 
    ```yaml
    - uses: peter-evans/repository-dispatch@v3
      with:
-       token: ${{ secrets.IAC_REPO_TOKEN }}
+       token: ${{ secrets.OPS_TOKEN }}
        repository: Claudio712005/service-track-aws-iac
        event-type: image-published
        client-payload: '{"environment":"prd","image_tag":"${{ github.sha }}"}'

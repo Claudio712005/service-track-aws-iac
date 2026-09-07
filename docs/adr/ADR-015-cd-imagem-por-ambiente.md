@@ -4,6 +4,11 @@
 - **Data:** 2026-07-24
 - **Relaciona:** [ADR-012](ADR-012-gitops-eks-nodeport.md)
 
+
+> **Revisado em 07/09/2026.** `IAC_REPO_TOKEN` foi consolidado em `OPS_TOKEN`:
+> uma credencial só para toda integração entre repositórios. O mecanismo de
+> `repository_dispatch` não mudou; mudou de quem é o token. Ver `GLOBAL-RFC-008`.
+
 ## Contexto
 
 A esteira do **repositório da API** compila e publica a imagem no ECR. O ArgoCD,
@@ -69,13 +74,13 @@ como saída de emergência ou primeiro deploy.
    ```yaml
    - uses: peter-evans/repository-dispatch@v3
      with:
-       token: ${{ secrets.IAC_REPO_TOKEN }}
+       token: ${{ secrets.OPS_TOKEN }}
        repository: Claudio712005/service-track-aws-iac
        event-type: image-published
        client-payload: '{"environment":"prd","image_tag":"${{ github.sha }}"}'
    ```
 
-3. `IAC_REPO_TOKEN` é um PAT fino ou GitHub App com escopo **`contents: write`**
+3. `OPS_TOKEN` é um PAT fine-grained com escopo **`contents: write`** e **`actions: read`**
    apenas neste repositório. É o único segredo que cruza os dois repos.
 
 ## Consequências
