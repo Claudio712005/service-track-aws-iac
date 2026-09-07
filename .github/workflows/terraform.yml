@@ -1,6 +1,6 @@
 name: Terraform
 
-run-name: "TF ${{ inputs.action }} -> ${{ inputs.env }} por @${{ github.actor }}"
+run-name: "TF ${{ inputs.action }} ${{ inputs.camada }} -> ${{ inputs.env }} por @${{ github.actor }}"
 
 on:
   workflow_dispatch:
@@ -22,6 +22,14 @@ on:
         options:
           - hml
           - prd
+      camada:
+        description: "Camada da infraestrutura"
+        required: true
+        type: choice
+        default: stack
+        options:
+          - rede
+          - stack
       lambda_image_tag:
         description: "Tag da imagem da Lambda no ECR"
         required: false
@@ -32,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: terraform-${{ inputs.env }}
+  group: terraform-${{ inputs.camada }}-${{ inputs.env }}
   cancel-in-progress: false
 
 env:
@@ -109,8 +117,69 @@ jobs:
             echo "- [ver job](${{ needs.prepare.outputs.run_url }})"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  rede:
+    name: "3. ${{ inputs.action }} da rede (${{ inputs.env }})"
+    needs: [prepare, validate]
+    if: inputs.camada == 'rede'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    defaults:
+      run:
+        working-directory: iac/network/${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Garantir o bucket de state
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/bootstrap-tfstate.sh
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      - name: terraform plan
+        if: inputs.action != 'apply'
+        run: |
+          EXTRA=()
+          if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
+          terraform plan "${EXTRA[@]}" -no-color -lock-timeout=10m -out=tfplan.bin
+
+      - name: terraform apply
+        if: inputs.action == 'apply'
+        run: terraform apply -no-color -auto-approve -lock-timeout=10m
+
+      - name: terraform destroy
+        if: inputs.action == 'destroy'
+        run: terraform apply -no-color -lock-timeout=10m tfplan.bin
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Rede de ${{ inputs.env }}"
+            echo ""
+            echo "Operacao: **${{ inputs.action }}** · Resultado: **${{ job.status }}**"
+            echo ""
+            echo "A rede vive em state proprio (\`servicetrack/${{ inputs.env }}-network\`)"
+            echo "porque o banco e o stack a consomem por remote state."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   executar:
-    name: "3. ${{ inputs.action }} (${{ inputs.env }})"
+    name: "3. ${{ inputs.action }} do stack (${{ inputs.env }})"
+    if: inputs.camada == 'stack'
     needs: [prepare, validate]
     runs-on: ubuntu-latest
     environment:
@@ -157,7 +226,7 @@ jobs:
                 --bucket servicetrack-tfstate-821146464895 \
                 --key "servicetrack/$ENV-network/terraform.tfstate" >/dev/null 2>&1; then
             echo "::error::A rede de $ENV nao foi aplicada."
-            echo "::error::Rode antes: Actions -> Network -> apply -> env=$ENV"
+            echo "::error::Rode antes: Actions -> Terraform -> apply, camada=rede, env=$ENV"
             faltando=1
           fi
 

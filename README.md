@@ -55,7 +55,7 @@ docs/
   credenciais-aws.yml  Replica as credenciais da AWS nos quatro repositorios
   subir-ambiente.yml   Orquestra rede, banco, stack, Lambda e aplicacao na ordem
   destruir-ambiente.yml Ordem inversa, com escopo so-o-stack ou tudo
-  network.yml          Aplica a rede do ambiente (manual) - primeira fase
+  terraform.yml        Aplica rede ou stack (input camada) - manual
   terraform.yml        plan / apply / destroy por ambiente (manual)
   bootstrap-state.yml  Cria o bucket S3 do state (manual, uma vez por conta)
   unlock-state.yml     Remove lock orfao de um state
