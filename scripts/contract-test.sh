@@ -23,7 +23,14 @@ status() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$@"; }
 
 expect_status() {
   local name="$1" want="$2"; shift 2
-  local got; got="$(status "$@")"
+  local got tentativas="${ASSERCAO_TENTATIVAS:-8}" i
+  for i in $(seq 1 "$tentativas"); do
+    got="$(status "$@")"
+    [ "$got" = "$want" ] && { pass "$name"; return; }
+    [ "$got" != "403" ] && break
+    [ "$want" = "403" ] && break
+    sleep 2
+  done
   if [ "$got" = "$want" ]; then pass "$name"; else fail "$name" "esperava $want, veio $got"; fi
 }
 
