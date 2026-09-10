@@ -154,7 +154,7 @@ Esta é a lista completa do que precisa existir e como criar.
 |---|---|---|---|
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | GitHub → **este repo** → **Repository secrets** | a cada laboratório | AWS Academy → AWS Details → AWS CLI. Depois rode a esteira **Credenciais AWS**, que replica nos quatro repositórios |
 | `OPS_TOKEN` | GitHub → **os quatro repos** → Repository secrets | uma vez | PAT fine-grained nos quatro repositórios. Permissões na seção 2 abaixo |
-| `UNSPLASH_ACCESS_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Unsplash |
+| `UNSPLASH_ACCESS_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Unsplash. **Este e o nome do secret**; dentro do pod a variavel se chama `UNSPLASH_CHAVE_ACESSO` — nao confundir |
 | `RESEND_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | painel do Resend |
 | `DD_API_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → API Keys |
 | `DD_APP_KEY` | GitHub → **este repo** → Environments `hml` e `prd` | uma vez | Datadog → Organization Settings → Application Keys |

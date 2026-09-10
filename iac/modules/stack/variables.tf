@@ -238,6 +238,11 @@ variable "unsplash_access_key" {
   type        = string
   sensitive   = true
   default     = ""
+
+  validation {
+    condition     = trimspace(var.unsplash_access_key) != ""
+    error_message = "unsplash_access_key vazia. E obrigatoria para a aplicacao iniciar: sem ela o pod falha em CrashLoopBackOff com 'Failed to load config value for: unsplash.chave-acesso'. Defina o secret UNSPLASH_ACCESS_KEY no environment do GitHub (o nome do secret difere da variavel do pod)."
+  }
 }
 
 variable "resend_api_key" {
