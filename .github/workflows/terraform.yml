@@ -216,6 +216,27 @@ jobs:
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init -input=false
 
+      - name: Conferir os segredos de terceiro
+        if: inputs.action == 'apply' && inputs.camada == 'stack'
+        env:
+          UNSPLASH: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          RESEND: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          faltando=0
+          if [ -z "${UNSPLASH:-}" ]; then
+            echo "::error::Secret UNSPLASH_ACCESS_KEY vazio no environment ${{ inputs.env }}."
+            echo "::error::Sem ele o pod nao inicia: 'Failed to load config value for: unsplash.chave-acesso'."
+            echo "::error::Atencao ao nome: o secret do GitHub e UNSPLASH_ACCESS_KEY;"
+            echo "::error::UNSPLASH_CHAVE_ACESSO e a variavel dentro do pod, nao o secret."
+            faltando=1
+          fi
+          if [ -z "${RESEND:-}" ]; then
+            echo "::error::Secret RESEND_API_KEY vazio no environment ${{ inputs.env }}."
+            faltando=1
+          fi
+          [ "$faltando" -eq 0 ] || exit 1
+          echo "segredos de terceiro presentes."
+
       - name: Conferir pre-requisitos de rede e banco
         if: inputs.action != 'destroy'
         run: |
