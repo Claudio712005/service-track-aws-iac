@@ -64,3 +64,17 @@ variable "datadog_notificacao" {
   type        = string
   default     = ""
 }
+
+variable "unsplash_access_key" {
+  description = "Chave da API do Unsplash. Vem do secret UNSPLASH_ACCESS_KEY pela esteira."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "resend_api_key" {
+  description = "Chave da API do Resend. Vem do secret RESEND_API_KEY pela esteira."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

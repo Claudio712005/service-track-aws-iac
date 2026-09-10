@@ -22,6 +22,9 @@ module "stack" {
   bootstrap_argocd_apps = var.bootstrap_argocd_apps
   app_secret_params     = var.app_secret_params
 
+  unsplash_access_key = var.unsplash_access_key
+  resend_api_key      = var.resend_api_key
+
   observabilidade = {
     habilitada  = var.datadog_api_key != ""
     api_key     = var.datadog_api_key
