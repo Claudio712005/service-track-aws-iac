@@ -35,6 +35,25 @@ expect_not_status() {
 
 echo "contract test -> $BASE_URL"
 
+esperar_chave_valer() {
+  local tentativas="${API_KEY_ESPERA_TENTATIVAS:-20}" i got
+  for i in $(seq 1 "$tentativas"); do
+    got="$(status -X POST "$BASE_URL/clientes" \
+      -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+      --data '{"campo":"invalido"}')"
+    if [ "$got" != "403" ]; then
+      [ "$i" -gt 1 ] && echo "  chave valendo apos ${i} tentativa(s)"
+      return 0
+    fi
+    sleep 6
+  done
+  echo "  AVISO: a chave de API ainda responde 403 apos $((tentativas * 6))s." >&2
+  echo "         As asserções que dependem dela vao falhar." >&2
+  return 1
+}
+
+esperar_chave_valer || true
+
 preflight="$(curl -s -i -X OPTIONS --max-time 20 \
   -H 'Origin: https://exemplo.test' \
   -H 'Access-Control-Request-Method: GET' \
