@@ -66,7 +66,7 @@ variable "lambda_timeout" {
 
 variable "jwt_issuer" {
   type    = string
-  default = "https://servicetrack.com.br/auth"
+  default = "service-track-api"
 }
 
 variable "jwt_expiration_seconds" {
