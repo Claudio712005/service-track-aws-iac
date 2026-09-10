@@ -12,8 +12,8 @@ resource "aws_security_group_rule" "nlb_from_vpc" {
   to_port           = 80
   protocol          = "tcp"
   security_group_id = aws_security_group.nlb.id
-  cidr_blocks       = [var.vpc_cidr]
-  description       = "ENIs do VPC Link. Nao sao referenciaveis por security group, entao a origem e a VPC"
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "VPC Link do API Gateway. As ENIs vivem em VPC gerenciada pela AWS, fora deste CIDR, e a AWS nao publica prefix list para restringir a origem. O NLB e internal: sem endereco publico, alcancavel so pelo VPC Link"
 }
 
 resource "aws_security_group_rule" "nlb_para_nodes" {
