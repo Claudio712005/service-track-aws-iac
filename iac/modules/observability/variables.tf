@@ -3,9 +3,10 @@ variable "environment" {
 }
 
 variable "notificacao" {
-  description = "Destino do alerta. O @ inicial e obrigatorio para o Datadog tratar como destino, e o modulo o acrescenta quando ausente: clausilva@exemplo.com e @clausilva@exemplo.com valem igual. Sem @ o valor vira texto solto e ninguem e avisado."
+  description = "Destino do alerta. Precisa ser usuario da organizacao no Datadog: endereco de fora passa na sintaxe e a entrega e descartada em silencio, sem erro. O @ inicial e obrigatorio e o modulo o acrescenta quando ausente."
   type        = string
   default     = ""
+
 }
 
 variable "tags_monitor" {
