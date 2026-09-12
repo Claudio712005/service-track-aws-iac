@@ -1,6 +1,12 @@
 locals {
   escopo = "env:${var.environment},projeto:servicetrack"
   sufixo = upper(var.environment)
+
+  notificacao = (
+    var.notificacao == "" || startswith(trimspace(var.notificacao), "@")
+    ? var.notificacao
+    : "@${trimspace(var.notificacao)}"
+  )
 }
 
 resource "datadog_monitor" "latencia_da_api" {
@@ -13,7 +19,7 @@ resource "datadog_monitor" "latencia_da_api" {
     Onde olhar: saturacao do HPA, consultas lentas no banco (pg_stat_statements)
     e latencia das integracoes externas.
 
-    ${var.notificacao}
+    ${local.notificacao}
   EOT
 
   query = "avg(last_10m):p95:trace.io.quarkus.opentelemetry.server{${local.escopo}} > ${var.limite_latencia_p95_segundos}"
@@ -35,7 +41,7 @@ resource "datadog_monitor" "erros_5xx" {
   message = <<-EOT
     A API esta respondendo 5xx acima do limite aceito.
 
-    ${var.notificacao}
+    ${local.notificacao}
   EOT
 
   query = "sum(last_5m):sum:trace.io.quarkus.opentelemetry.server.errors{${local.escopo}}.as_count() > ${var.limite_erros_5xx}"
@@ -60,7 +66,7 @@ resource "datadog_monitor" "falha_no_processamento_de_os" {
     A metrica vem do interceptor de casos de uso. Para achar a causa, filtre os
     logs por erro_codigo comecando em OS_ e siga o traceId da linha.
 
-    ${var.notificacao}
+    ${local.notificacao}
   EOT
 
   query = "sum(last_15m):sum:servicetrack.usecase.execucoes{entidade:ordem_servico,resultado:erro,${local.escopo}}.as_count() > ${var.limite_falhas_os}"
@@ -86,7 +92,7 @@ resource "datadog_monitor" "saude_dos_pods" {
     ECR voltou vazio, readiness falhando por dependencia do banco, ou secrets
     ausentes porque o bootstrap nao rodou.
 
-    ${var.notificacao}
+    ${local.notificacao}
   EOT
 
   query = "avg(last_5m):avg:kubernetes_state.deployment.replicas_ready{kube_deployment:service-track-app,${local.escopo}} < ${var.minimo_de_pods}"
@@ -109,7 +115,7 @@ resource "datadog_monitor" "recursos_do_cluster" {
     Os nodes estao saturados de CPU. O HPA pode nao conseguir escalar por falta
     de capacidade no node group.
 
-    ${var.notificacao}
+    ${local.notificacao}
   EOT
 
   query = "avg(last_10m):avg:kubernetes.cpu.usage.total{${local.escopo}} / avg:kubernetes.cpu.limits{${local.escopo}} > ${var.limite_saturacao}"
@@ -135,7 +141,7 @@ resource "datadog_monitor" "erros_de_integracao" {
 
     O circuito de fault tolerance pode ter aberto.
 
-    ${var.notificacao}
+    ${local.notificacao}
   EOT
 
   query = "logs(\"service:service-track-api env:${var.environment} @erro_tipo:IntegracaoExternaException\").index(\"*\").rollup(\"count\").last(\"15m\") > ${var.limite_falhas_integracao}"

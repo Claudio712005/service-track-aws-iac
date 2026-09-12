@@ -3,7 +3,7 @@ variable "environment" {
 }
 
 variable "notificacao" {
-  description = "Destino do alerta no formato do Datadog, por exemplo @slack-canal ou @email."
+  description = "Destino do alerta. O @ inicial e obrigatorio para o Datadog tratar como destino, e o modulo o acrescenta quando ausente: clausilva@exemplo.com e @clausilva@exemplo.com valem igual. Sem @ o valor vira texto solto e ninguem e avisado."
   type        = string
   default     = ""
 }
