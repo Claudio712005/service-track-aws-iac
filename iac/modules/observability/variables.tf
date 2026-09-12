@@ -41,7 +41,7 @@ variable "limite_saturacao" {
 }
 
 variable "limite_uso_de_conexoes" {
-  description = "Fracao do teto de conexoes do banco que dispara o alerta."
+  description = "Reservado. O monitor de conexoes do banco so existira quando a integracao Postgres estiver configurada no agente: sem ela nenhuma metrica postgresql chega e o monitor ficaria permanentemente em No Data."
   type        = number
 }
 
@@ -51,8 +51,3 @@ variable "habilitar_monitores_de_log" {
   default     = false
 }
 
-variable "habilitar_monitor_de_banco" {
-  description = "Monitor de conexoes do PostgreSQL. Exige a integracao Postgres configurada no agente; sem ela as metricas postgresql nao existem e o monitor fica permanentemente em No Data."
-  type        = bool
-  default     = false
-}

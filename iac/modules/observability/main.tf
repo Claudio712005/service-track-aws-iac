@@ -149,33 +149,6 @@ resource "datadog_monitor" "erros_de_integracao" {
   tags              = var.tags_monitor
 }
 
-resource "datadog_monitor" "banco_sem_conexoes" {
-  count = var.habilitar_monitor_de_banco ? 1 : 0
-
-  name = "[${local.sufixo}] Banco proximo do teto de conexoes"
-  type = "query alert"
-
-  message = <<-EOT
-    O uso de conexoes do PostgreSQL passou do limite seguro.
-
-    O orcamento de conexoes esta declarado em service-track-db-infra. Se o teto
-    do HPA subiu sem rever o orcamento, e aqui que aparece.
-
-    ${var.notificacao}
-  EOT
-
-  query = "avg(last_5m):avg:postgresql.connections{${local.escopo}} / avg:postgresql.max_connections{${local.escopo}} > ${var.limite_uso_de_conexoes}"
-
-  monitor_thresholds {
-    critical = var.limite_uso_de_conexoes
-    warning  = var.limite_uso_de_conexoes * 0.8
-  }
-
-  notify_no_data    = false
-  renotify_interval = 60
-  tags              = var.tags_monitor
-}
-
 resource "datadog_dashboard" "servicetrack" {
   title       = "ServiceTrack — ${local.sufixo}"
   description = "Volume de ordens de servico, tempo por status, saude da API, recursos do cluster e erros de integracao."
