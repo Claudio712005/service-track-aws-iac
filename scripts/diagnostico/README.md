@@ -19,6 +19,7 @@ O argumento é o ambiente (`hml` ou `prd`), padrão `hml`.
 | `cadeia-de-segredos.sh` | O segredo chegou até o pod? Percorre SSM → secret do k8s → variável no processo |
 | `caminho-da-borda.sh` | O gateway alcança a aplicação? Percorre integração → VPC Link → NLB → NodePort → pod |
 | `fluxo-de-login.sh` | Autenticação e rotas de negócio respondem, nos dois papéis |
+| `chave-de-api.sh` | Imprime URL e chave de API prontas para colar, ou exportar no shell |
 
 ## Por que cada um existe
 
@@ -38,6 +39,17 @@ Divergência ali faz o login funcionar e toda rota de negócio devolver `401`.
 `hml` autoriza a chave de API de forma intermitente (`I-23` em
 `workspace/architecture/inconsistencias.md`). Os scripts repetem enquanto a resposta for
 `403`; qualquer outro status encerra a repetição na hora, então falha real continua visível.
+
+## A chave de API não vai para o log da esteira
+
+`chave-de-api.sh` existe para isso. O repositório é público: o resumo de uma execução é
+legível por qualquer pessoa e fica no histórico, enquanto a chave continua válida até o
+ambiente ser destruído.
+
+```bash
+scripts/diagnostico/chave-de-api.sh hml          # imprime url, chave e um curl de login
+eval "$(FORMATO=exportar scripts/diagnostico/chave-de-api.sh hml)"
+```
 
 ## Pré-requisitos
 
