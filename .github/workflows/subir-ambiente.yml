@@ -156,8 +156,7 @@ jobs:
                 echo "A chave de API muda a cada recriacao. Para ler:"
                 echo ""
                 echo '```bash'
-                echo "cd iac/environments/${{ inputs.env }}"
-                echo "terraform output -json api_key_values | jq -r .web"
+                echo "scripts/diagnostico/chave-de-api.sh ${{ inputs.env }}"
                 echo '```'
                 echo ""
                 echo "Teste rapido, trocando CHAVE pelo valor acima:"

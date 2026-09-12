@@ -372,10 +372,17 @@ jobs:
               echo "| ArgoCD | sem LoadBalancer neste ambiente, use port-forward |"
             fi
             echo ""
-            echo "Chaves de API (uma por consumidor):"
+            echo "Chave de API (muda a cada recriacao, nao e impressa aqui porque"
+            echo "este repositorio e publico):"
             echo ""
             echo '```bash'
-            echo "cd $WD && terraform output -json api_key_values | jq -r .web"
+            echo "scripts/diagnostico/chave-de-api.sh ${{ inputs.env }}"
+            echo '```'
+            echo ""
+            echo "Ou, para exportar url e chave no shell:"
+            echo ""
+            echo '```bash'
+            echo "eval \"\$(FORMATO=exportar scripts/diagnostico/chave-de-api.sh ${{ inputs.env }})\""
             echo '```'
             echo ""
             echo "Acesso ao cluster e ao ArgoCD:"
