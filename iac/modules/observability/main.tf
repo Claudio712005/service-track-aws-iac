@@ -16,7 +16,7 @@ resource "datadog_monitor" "latencia_da_api" {
     ${var.notificacao}
   EOT
 
-  query = "avg(last_10m):p95:trace.http.server.request{${local.escopo}} > ${var.limite_latencia_p95_segundos}"
+  query = "avg(last_10m):p95:trace.io.quarkus.opentelemetry.server{${local.escopo}} > ${var.limite_latencia_p95_segundos}"
 
   monitor_thresholds {
     critical = var.limite_latencia_p95_segundos
@@ -38,7 +38,7 @@ resource "datadog_monitor" "erros_5xx" {
     ${var.notificacao}
   EOT
 
-  query = "sum(last_5m):sum:trace.http.server.request.errors{${local.escopo}}.as_count() > ${var.limite_erros_5xx}"
+  query = "sum(last_5m):sum:trace.io.quarkus.opentelemetry.server.errors{${local.escopo}}.as_count() > ${var.limite_erros_5xx}"
 
   monitor_thresholds {
     critical = var.limite_erros_5xx
@@ -112,7 +112,7 @@ resource "datadog_monitor" "recursos_do_cluster" {
     ${var.notificacao}
   EOT
 
-  query = "avg(last_10m):avg:kubernetes.cpu.usage.total{${local.escopo}} / avg:kubernetes.cpu.capacity{${local.escopo}} > ${var.limite_saturacao}"
+  query = "avg(last_10m):avg:kubernetes.cpu.usage.total{${local.escopo}} / avg:kubernetes.cpu.limits{${local.escopo}} > ${var.limite_saturacao}"
 
   monitor_thresholds {
     critical = var.limite_saturacao
@@ -150,6 +150,8 @@ resource "datadog_monitor" "erros_de_integracao" {
 }
 
 resource "datadog_monitor" "banco_sem_conexoes" {
+  count = var.habilitar_monitor_de_banco ? 1 : 0
+
   name = "[${local.sufixo}] Banco proximo do teto de conexoes"
   type = "query alert"
 
@@ -208,7 +210,7 @@ resource "datadog_dashboard" "servicetrack" {
       title = "Latencia p95 da API por rota"
 
       request {
-        q = "p95:trace.http.server.request{${local.escopo}} by {resource_name}"
+        q = "p95:trace.io.quarkus.opentelemetry.server{${local.escopo}} by {resource_name}"
       }
     }
   }
@@ -263,10 +265,10 @@ resource "datadog_dashboard" "servicetrack" {
 
   widget {
     timeseries_definition {
-      title = "Conexoes em uso no banco"
+      title = "CPU e memoria dos nodes"
 
       request {
-        q = "avg:postgresql.connections{${local.escopo}}"
+        q = "avg:kubernetes.cpu.usage.total{${local.escopo}}"
       }
     }
   }

@@ -50,3 +50,9 @@ variable "habilitar_monitores_de_log" {
   type        = bool
   default     = false
 }
+
+variable "habilitar_monitor_de_banco" {
+  description = "Monitor de conexoes do PostgreSQL. Exige a integracao Postgres configurada no agente; sem ela as metricas postgresql nao existem e o monitor fica permanentemente em No Data."
+  type        = bool
+  default     = false
+}
