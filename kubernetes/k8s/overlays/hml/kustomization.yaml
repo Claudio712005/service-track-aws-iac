@@ -13,7 +13,7 @@ components:
 images:
 - name: servicetrack-api
   newName: 821146464895.dkr.ecr.us-east-1.amazonaws.com/servicetrack-hml-app
-  newTag: 0c652a2c2169fe063e698047a2818d877ca86137
+  newTag: a9bf497011271dfde3f385dc2e4e7c59b674bc76
 
 configMapGenerator:
 - literals:
