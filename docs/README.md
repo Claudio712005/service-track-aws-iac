@@ -48,15 +48,8 @@ deste repositório.
 
 ## Diagramas
 
-- [diagramas/rede.md](diagramas/rede.md) — topologia de VPC, subnets, NAT e o caminho do
-  tráfego até o pod
-- [diagramas/deployment.md](diagramas/deployment.md) — mapeamento software → nó de execução,
-  fluxo de imagem e de segredos
-
-Ambos descrevem o estado da Fase 3. Os desenhos equivalentes da Fase 2 estão em
-`service-track-api/docs/mvp-2/infra-fase-2/` e descrevem o cluster `servicetrack-dev`, que não
-existe mais.
-
-## Guias
-
+- [diagramas/arquitetura-aws.drawio](diagramas/arquitetura-aws.drawio) — arquitetura dos dois
+  ambientes: borda, VPC, EKS, RDS, esteira de entrega e legenda. Abrir em diagrams.net.
+- [acoplamentos.md](acoplamentos.md) — o que o desenho mostra mas não explica: NodePort 30080,
+  inversão do ArgoCD, segredos fora do Git, HPA medido contra `requests`, SG do NLB.
 - [api-gateway/README.md](api-gateway/README.md) — guia técnico e operacional
