@@ -100,11 +100,11 @@ e cria os Secrets no cluster (`IAC-ADR-022`), porque External Secrets com IRSA e
 pela `LabRole` do AWS Academy.
 
 **O overlay de produção chama-se `prod`, o ambiente Terraform chama-se `prd`.** Os dois nomes
-convivem: `iac/environments/prd/` aplica a infraestrutura, `kubernetes/k8s/overlays/prod/` é o
+convivem: `iac/environments/prd/` aplica a infraestrutura, `kubernetes/k8s/overlays/prd/` é o
 que o ArgoCD sincroniza. Errar o nome ao montar caminho é falha silenciosa — o Kustomize
 simplesmente não acha o diretório.
 
-**Só `prod` tem HPA.** `kubernetes/k8s/overlays/prod/hpa.yaml` define 2..4 réplicas com CPU a
+**Só `prd` tem HPA.** `kubernetes/k8s/overlays/prd/hpa.yaml` define 2..4 réplicas com CPU a
 70% e memória a 80%. As 4 cabem em um único `t3.medium`, então a escala não espera node novo. O overlay `hml` não sobrescreve réplicas e roda no valor do `base`, o que
 é coerente com o enxugamento de HML por custo (`IAC-ADR-014`). Ao mexer nesse teto, rever o
 orçamento de conexões do banco (`DB-ADR-004`).

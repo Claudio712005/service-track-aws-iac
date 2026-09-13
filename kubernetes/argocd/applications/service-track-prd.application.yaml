@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: service-track-prod
+  name: service-track-prd
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/Claudio712005/service-track-aws-iac.git
     targetRevision: main
-    path: kubernetes/k8s/overlays/prod
+    path: kubernetes/k8s/overlays/prd
   destination:
     server: https://kubernetes.default.svc
     namespace: service-track
