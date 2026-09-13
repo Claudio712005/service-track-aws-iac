@@ -297,8 +297,8 @@ resource "aws_lambda_permission" "authorizer" {
 resource "aws_wafv2_web_acl" "this" {
   count = local.waf_enabled ? 1 : 0
 
-  name        = "${var.name}-${var.environment}-waf"
-  description = "Rate limiting por IP na borda do API Gateway (${var.environment})"
+  name        = "${var.name}-waf"
+  description = "Rate limiting por IP na borda do API Gateway em ${var.environment}"
   scope       = "REGIONAL"
 
   default_action {
