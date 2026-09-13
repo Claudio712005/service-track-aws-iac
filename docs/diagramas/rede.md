@@ -75,6 +75,13 @@ Multi-AZ de PRD precisa de duas para o standby, e o NLB do VPC Link distribui en
 acesso direto é fechado por header compartilhado, não por rede — ver `IAC-ADR-017` para o
 porquê de a rede sozinha não conseguir fechar.
 
+**O SG do NLB libera a porta 80 de `0.0.0.0/0`, e isso não é uma brecha.** As ENIs do VPC Link
+de REST API vivem em VPC gerenciada pela AWS, fora do CIDR desta conta, e a AWS não publica
+prefix list para restringir a origem. Restringir ao CIDR da VPC — como estava até 07/09/2026 —
+descartava o tráfego legítimo do gateway: a integração respondia 500 após 11 segundos de
+timeout, sem nada aparecer no log da aplicação. O que fecha o caminho é o NLB ser `internal`,
+não a regra de origem.
+
 **O RDS não nasce aqui.** É do `service-track-db-infra`, aplicado entre a rede e o stack. O
 security group do banco nasce sem regra de entrada e é este repositório que cria o ingress
 apontando para o SG dos nodes e da Lambda (`DB-ADR-003`).

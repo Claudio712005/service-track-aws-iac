@@ -99,15 +99,24 @@ Essa inversão é o que permitiu remover `infra/` e `k8s/` da API.
 e cria os Secrets no cluster (`IAC-ADR-022`), porque External Secrets com IRSA está bloqueado
 pela `LabRole` do AWS Academy.
 
-**O overlay de produção chama-se `prod`, o ambiente Terraform chama-se `prd`.** Os dois nomes
-convivem: `iac/environments/prd/` aplica a infraestrutura, `kubernetes/k8s/overlays/prd/` é o
-que o ArgoCD sincroniza. Errar o nome ao montar caminho é falha silenciosa — o Kustomize
-simplesmente não acha o diretório.
+**Ambiente e diretório usam o mesmo nome.** `iac/environments/prd/` aplica a infraestrutura e
+`kubernetes/k8s/overlays/prd/` é o que o ArgoCD sincroniza. Até 13/09/2026 o overlay chamava-se
+`prod` enquanto o ambiente era `prd`, e o stack monta o caminho a partir de `var.environment` —
+o apply de PRD quebrava em `filesha1`, e o bump de imagem procurava um diretório inexistente.
 
 **Só `prd` tem HPA.** `kubernetes/k8s/overlays/prd/hpa.yaml` define 2..4 réplicas com CPU a
-70% e memória a 80%. As 4 cabem em um único `t3.medium`, então a escala não espera node novo. O overlay `hml` não sobrescreve réplicas e roda no valor do `base`, o que
-é coerente com o enxugamento de HML por custo (`IAC-ADR-014`). Ao mexer nesse teto, rever o
-orçamento de conexões do banco (`DB-ADR-004`).
+70% e memória a 80%. As 4 **não** cabem em um único `t3.medium`: o node entrega 17 slots de pod
+e a plataforma já ocupa a maior parte, então PRD roda com dois nodes fixos (`IAC-ADR-023`).
+Não há Cluster Autoscaler — `max_size` é teto, não elasticidade.
+
+O overlay `hml` não sobrescreve réplicas e roda no valor do `base`, coerente com o enxugamento
+de HML por custo (`IAC-ADR-014`). Ao mexer nesse teto, rever o orçamento de conexões do banco
+(`DB-ADR-004`).
+
+**A memória do HPA se mede contra `requests`, não contra `limits`.** A imagem roda com
+`-XX:MaxRAMPercentage=75.0`, que dimensiona o heap pelo *limit*. Enquanto `limits` valia o
+dobro de `requests`, a JVM ficava autorizada a passar do request antes de qualquer tráfego, e
+o HPA lia 121% de utilização em repouso. `requests.memory` subiu para 448Mi em 13/09/2026.
 
 **Primeiro apply de um ambiente deixa os pods em `ImagePullBackOff`.** O ECR nasce vazio no
 mesmo apply que cria o cluster. É esperado até a primeira publicação de imagem, não é defeito.
