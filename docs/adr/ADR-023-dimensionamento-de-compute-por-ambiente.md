@@ -5,6 +5,8 @@
 - **Revisado em:** 2026-08-02 — PRD redimensionado para a apresentação da Fase 3
 - **Revisado em:** 2026-09-02 — HML passa a `t3.medium`: o orçamento de pods abaixo não
   contava o ArgoCD, e o cluster não cabia em `t3.small`
+- **Revisado em:** 2026-09-13 — PRD passa a dois nodes fixos: o HPA escala até 4 réplicas e
+  não há Cluster Autoscaler, então `max_size` era permissão que ninguém exercia
 - **Origem:** [RFC-006](../rfc/RFC-006-dimensionamento-de-compute.md)
 
 ## Contexto
@@ -15,8 +17,8 @@ muda é o node group:
 | | HML | PRD |
 |---|---|---|
 | `node_instance_types` | `t3.medium` | `t3.medium` |
-| `node_desired_size` | 1 | 1 |
-| `node_min_size` | 1 | 1 |
+| `node_desired_size` | 1 | 2 |
+| `node_min_size` | 1 | 2 |
 | `node_max_size` | 1 | 2 |
 | HPA da aplicação | não existe | 2..4, CPU 70% / memória 80% |
 | Datadog cluster agent | 1 réplica | 1 réplica |
