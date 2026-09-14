@@ -5,7 +5,7 @@ Provisiona rede, cluster Kubernetes gerenciado (EKS), repositórios de imagem (E
 GitOps (ArgoCD), o serviço de autenticação em AWS Lambda (Quarkus/Kotlin) e a
 exposição externa da API por API Gateway.
 
-> **O banco de dados não vive mais aqui.** O RDS foi para
+> **O banco de dados não vive mais aqui.** O RDS foi para 
 > [service-track-db-infra](https://github.com/Claudio712005/service-track-db-infra),
 > junto com o orçamento de conexões e as roles de runtime (`DB-ADR-003`).
 > Este repositório lê endpoint, credenciais e tamanhos de pool do SSM, e cria as
