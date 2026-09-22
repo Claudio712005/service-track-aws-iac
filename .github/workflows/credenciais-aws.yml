@@ -14,15 +14,15 @@ concurrency:
 
 jobs:
   propagar:
-    name: Replica as credenciais nos quatro repositorios
+    name: Replica as credenciais na plataforma e nos microsservicos
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-      REPOS: >-
-        Claudio712005/service-track-aws-iac
-        Claudio712005/service-track-db-infra
-        Claudio712005/service-track-lambda
-        Claudio712005/service-track-api
+      OWNER: ${{ github.repository_owner }}
+      PLATAFORMA: >-
+        service-track-aws-iac
+        service-track-db-infra
+        service-track-lambda
     steps:
       - name: Conferir a origem
         run: |
@@ -55,6 +55,23 @@ jobs:
           echo "conta=$CONTA" >> "$GITHUB_OUTPUT"
           echo "autenticado na conta $CONTA"
 
+      - name: Descobrir os repositorios de destino
+        id: destinos
+        run: |
+          set -o pipefail
+          DESTINOS="$PLATAFORMA"
+          for repo in $(gh api --paginate "users/$OWNER/repos?per_page=100" --jq '.[].name'); do
+            case " $DESTINOS " in *" $repo "*) continue ;; esac
+            for marcador in k8s/argocd infra/terraform; do
+              if gh api "repos/$OWNER/$repo/contents/$marcador" >/dev/null 2>&1; then
+                DESTINOS="$DESTINOS $repo"
+                echo "microsservico: $repo ($marcador)"
+                break
+              fi
+            done
+          done
+          echo "repos=$DESTINOS" >> "$GITHUB_OUTPUT"
+
       - name: Propagar
         id: propagar
         env:
@@ -64,7 +81,8 @@ jobs:
         run: |
           set -o pipefail
           total=0
-          for repo in $REPOS; do
+          for nome in ${{ steps.destinos.outputs.repos }}; do
+            repo="$OWNER/$nome"
             echo "::group::$repo"
             gh secret set AWS_ACCESS_KEY_ID     --repo "$repo" --body "$VAL_ID"
             gh secret set AWS_SECRET_ACCESS_KEY --repo "$repo" --body "$VAL_SECRET"
@@ -96,11 +114,13 @@ jobs:
             echo "| Campo | Valor |"
             echo "|---|---|"
             echo "| Conta | \`${{ steps.conta.outputs.conta }}\` |"
+            echo "| Repositorios | ${{ steps.destinos.outputs.repos }} |"
             echo "| Secrets gravadas | ${{ steps.propagar.outputs.total || 0 }} |"
             echo "| Resultado | ${{ steps.propagar.outcome }} |"
             echo ""
             if [ "${{ steps.propagar.outcome }}" = "success" ]; then
-              echo "As quatro esteiras podem rodar. Refaca esta propagacao a cada"
-              echo "sessao nova do laboratorio."
+              echo "As esteiras podem rodar. Refaca esta propagacao a cada sessao nova do"
+              echo "laboratorio. Microsservico novo entra sozinho quando tiver k8s/argocd/"
+              echo "ou infra/terraform/ na branch padrao."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

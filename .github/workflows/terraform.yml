@@ -30,11 +30,17 @@ on:
         options:
           - rede
           - stack
-      lambda_image_tag:
-        description: "Tag da imagem da Lambda no ECR"
-        required: false
+  workflow_call:
+    inputs:
+      action:
+        required: true
         type: string
-        default: latest
+      env:
+        required: true
+        type: string
+      camada:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -75,7 +81,7 @@ jobs:
             echo "| Acao | \`${{ inputs.action }}\` |"
             echo "| Ambiente | \`${{ inputs.env }}\` |"
             echo "| Diretorio | \`${{ steps.ctx.outputs.workdir }}\` |"
-            echo "| Tag da imagem Lambda | \`${{ inputs.lambda_image_tag }}\` |"
+            echo "| Camada | \`${{ inputs.camada }}\` |"
             echo "| Disparado por | @${{ github.actor }} |"
             echo "| Commit | \`${{ github.sha }}\` |"
             echo "| Execucao | [ver run](${{ steps.ctx.outputs.run_url }}) |"
@@ -147,6 +153,16 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: bash scripts/bootstrap-tfstate.sh
 
+      - name: Conferir que o banco ja foi destruido
+        if: inputs.action == 'destroy'
+        run: |
+          if aws ssm get-parameter --name "/servicetrack/${{ inputs.env }}/db/endpoint" >/dev/null 2>&1; then
+            echo "::error::O banco de ${{ inputs.env }} ainda existe e vive dentro desta rede."
+            echo "::error::Destrua antes pela esteira Terraform do service-track-db-infra (env=${{ inputs.env }})."
+            exit 1
+          fi
+          echo "banco de ${{ inputs.env }} ausente, rede pode ser destruida."
+
       - name: terraform init
         run: terraform init -input=false
 
@@ -184,12 +200,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.env }}
-    env:
-      TF_VAR_datadog_api_key: ${{ secrets.DD_API_KEY }}
-      TF_VAR_datadog_app_key: ${{ secrets.DD_APP_KEY }}
-      TF_VAR_datadog_notificacao: ${{ secrets.DD_NOTIFICACAO }}
-      TF_VAR_unsplash_access_key: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-      TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -216,28 +226,30 @@ jobs:
       - name: terraform init
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init -input=false
 
-      - name: Conferir os segredos de terceiro
-        if: inputs.action == 'apply' && inputs.camada == 'stack'
-        env:
-          UNSPLASH: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-          RESEND: ${{ secrets.RESEND_API_KEY }}
+      - name: Ler as flags do ambiente
+        id: flags
         run: |
-          faltando=0
-          if [ -z "${UNSPLASH:-}" ]; then
-            echo "::error::Secret UNSPLASH_ACCESS_KEY vazio no environment ${{ inputs.env }}."
-            echo "::error::Sem ele o pod nao inicia: 'Failed to load config value for: unsplash.chave-acesso'."
-            echo "::error::Atencao ao nome: o secret do GitHub e UNSPLASH_ACCESS_KEY;"
-            echo "::error::UNSPLASH_CHAVE_ACESSO e a variavel dentro do pod, nao o secret."
-            faltando=1
-          fi
-          if [ -z "${RESEND:-}" ]; then
-            echo "::error::Secret RESEND_API_KEY vazio no environment ${{ inputs.env }}."
-            faltando=1
-          fi
-          [ "$faltando" -eq 0 ] || exit 1
-          echo "segredos de terceiro presentes."
+          WD="${{ needs.prepare.outputs.workdir }}"
+          ler() {
+            echo "var.$1" | terraform -chdir=$WD console 2>/dev/null | tr -d '"' | tail -n 1
+          }
+          AUTH="$(ler habilitar_autenticacao)"
+          BORDA="$(ler habilitar_borda)"
+          for v in AUTH BORDA; do
+            case "${!v}" in
+              true|false) ;;
+              *)
+                echo "::error::Nao consegui ler as flags do ambiente com 'terraform console'."
+                echo "::error::Valor lido para $v: '${!v}'"
+                exit 1
+                ;;
+            esac
+          done
+          echo "auth=$AUTH" >> "$GITHUB_OUTPUT"
+          echo "borda=$BORDA" >> "$GITHUB_OUTPUT"
+          echo "autenticacao=$AUTH borda=$BORDA"
 
-      - name: Conferir pre-requisitos de rede e banco
+      - name: Conferir pre-requisitos
         if: inputs.action != 'destroy'
         run: |
           ENV="${{ inputs.env }}"
@@ -251,14 +263,15 @@ jobs:
             faltando=1
           fi
 
-          if ! aws ssm get-parameter --name "/servicetrack/$ENV/db/endpoint" >/dev/null 2>&1; then
-            echo "::error::O banco de $ENV nao foi aplicado."
+          if [ "${{ steps.flags.outputs.auth }}" = "true" ] \
+             && ! aws ssm get-parameter --name "/servicetrack/$ENV/db/endpoint" >/dev/null 2>&1; then
+            echo "::error::habilitar_autenticacao = true exige o banco de $ENV aplicado."
             echo "::error::Rode antes a esteira Terraform do repositorio service-track-db-infra (env=$ENV)."
             faltando=1
           fi
 
           [ "$faltando" -eq 0 ] || exit 1
-          echo "rede e banco de $ENV presentes."
+          echo "pre-requisitos de $ENV presentes."
 
       - name: Limpar load balancers orfaos
         if: inputs.action == 'destroy'
@@ -273,7 +286,6 @@ jobs:
           EXTRA=()
           if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
           terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color -lock-timeout=10m \
-            -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" \
             -out=tfplan.bin | tee plan.txt
           exit "${PIPESTATUS[0]}"
 
@@ -285,16 +297,15 @@ jobs:
           path: ${{ needs.prepare.outputs.workdir }}/tfplan.bin
           retention-days: 5
 
-      - name: Apply fase 1 — ECR
-        if: inputs.action == 'apply'
+      - name: Apply fase 1 — ECR da Lambda
+        if: inputs.action == 'apply' && steps.flags.outputs.auth == 'true'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m \
-            -target=module.stack.module.ecr_lambda \
-            -target=module.stack.module.ecr_app
+            -target=module.stack.module.ecr_lambda
 
       - name: Seed da imagem placeholder da Lambda
-        if: inputs.action == 'apply'
+        if: inputs.action == 'apply' && steps.flags.outputs.auth == 'true'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           ECR_URL="$(terraform -chdir=$WD output -raw lambda_ecr_repository_url)"
@@ -304,9 +315,7 @@ jobs:
         if: inputs.action == 'apply'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
-          EXTRA=()
-          terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m \
-            -var="lambda_image_tag=${{ inputs.lambda_image_tag }}" "${EXTRA[@]}"
+          terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m
 
       - name: terraform destroy (aplica plano)
         if: inputs.action == 'destroy'
@@ -314,7 +323,7 @@ jobs:
 
       - name: Coletar outputs
         id: outputs
-        if: inputs.action == 'apply'
+        if: inputs.action == 'apply' && steps.flags.outputs.borda == 'true'
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           API_URL="$(terraform -chdir=$WD output -raw api_gateway_url 2>/dev/null || echo '')"
@@ -322,7 +331,7 @@ jobs:
 
       - name: Contract test da API publicada
         id: contract
-        if: inputs.action == 'apply'
+        if: inputs.action == 'apply' && steps.flags.outputs.borda == 'true'
         env:
           STAGE_NAME: ${{ inputs.env }}
         run: |
@@ -359,11 +368,12 @@ jobs:
             echo ""
             echo "| Output | Valor |"
             echo "|---|---|"
-            echo "| URL da API | ${{ steps.outputs.outputs.api_url }} |"
-            echo "| Contract test | ${{ steps.contract.outcome }} |"
             echo "| Cluster EKS | $(terraform -chdir=$WD output -raw cluster_name 2>/dev/null || echo '-') |"
+            echo "| Autenticacao | ${{ steps.flags.outputs.auth }} |"
+            echo "| Borda (API Gateway) | ${{ steps.flags.outputs.borda }} |"
+            echo "| URL da API | ${{ steps.outputs.outputs.api_url || '-' }} |"
+            echo "| Contract test | ${{ steps.contract.outcome || 'ignorado' }} |"
             echo "| ECR Lambda | $(terraform -chdir=$WD output -raw lambda_ecr_repository_url 2>/dev/null || echo '-') |"
-            echo "| RDS | $(terraform -chdir=$WD output -raw rds_endpoint 2>/dev/null || echo '-') |"
             echo "| Lambda de autenticacao | $(terraform -chdir=$WD output -raw lambda_function_name 2>/dev/null || echo '-') |"
             ARGO_URL="$(terraform -chdir=$WD output -raw argocd_url 2>/dev/null || echo '')"
             if [ -n "$ARGO_URL" ]; then
@@ -372,18 +382,19 @@ jobs:
               echo "| ArgoCD | sem LoadBalancer neste ambiente, use port-forward |"
             fi
             echo ""
-            echo "Chave de API (muda a cada recriacao, nao e impressa aqui porque"
-            echo "este repositorio e publico):"
-            echo ""
-            echo '```bash'
-            echo "scripts/diagnostico/chave-de-api.sh ${{ inputs.env }}"
-            echo '```'
-            echo ""
-            echo "Ou, para exportar url e chave no shell:"
-            echo ""
-            echo '```bash'
-            echo "eval \"\$(FORMATO=exportar scripts/diagnostico/chave-de-api.sh ${{ inputs.env }})\""
-            echo '```'
+            if [ "${{ steps.flags.outputs.borda }}" = "true" ]; then
+              echo ""
+              echo "Chave de API (muda a cada recriacao, nao e impressa aqui porque"
+              echo "este repositorio e publico):"
+              echo ""
+              echo '```bash'
+              echo "scripts/diagnostico/chave-de-api.sh ${{ inputs.env }}"
+              echo '```'
+            else
+              echo ""
+              echo "Sem borda neste ambiente: os microsservicos so respondem dentro do"
+              echo "cluster. Para alcancar um deles do seu terminal, use port-forward."
+            fi
             echo ""
             echo "Acesso ao cluster e ao ArgoCD:"
             echo ""
@@ -395,6 +406,13 @@ jobs:
             if [ -z "$ARGO_URL" ]; then
               echo "kubectl -n argocd port-forward svc/argocd-server 8081:80"
             fi
+            echo '```'
+            echo ""
+            echo "Pods dos microsservicos descobertos:"
+            echo ""
+            echo '```bash'
+            echo "kubectl get pods -A -l app.kubernetes.io/part-of=service-track"
+            echo "kubectl -n argocd get applications"
             echo '```'
 
           } >> "$GITHUB_STEP_SUMMARY"
