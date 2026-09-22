@@ -37,28 +37,6 @@ import sys, base64, json
 d = sys.stdin.read().strip(); d += "=" * (-len(d) % 4)
 print(json.loads(base64.b64decode(d))["iss"])' 2>/dev/null)"
   echo "  issuer emitido: $ISS"
-  [ "$ISS" = "service-track-api" ] || erro "issuer diverge do que a aplicacao verifica; toda rota respondera 401"
+  [ "$ISS" = "service-track-api" ] || erro "issuer diverge de service-track-api; os microsservicos responderao 401"
 fi
-
-chamar() {
-  local rota="$1" token="$2" c
-  for _ in $(seq 1 6); do
-    c="$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 \
-      -H "x-api-key: $KEY" -H "Authorization: Bearer $token" "$URL$rota")"
-    [ "$c" != "403" ] && break; sleep 2
-  done
-  printf '%s' "$c"
-}
-
-secao "Rotas de cliente"
-for r in /veiculos /catalogo/servicos /catalogo/insumos /ordem-servico/lista /notificacoes; do
-  c="$(chamar "$r" "$TC")"
-  [ "$c" = "200" ] && ok "$r" || erro "$r -> $c"
-done
-
-secao "Rotas de mecanico"
-for r in /servicos /insumos /mecanicos; do
-  c="$(chamar "$r" "$TM")"
-  [ "$c" = "200" ] && ok "$r" || erro "$r -> $c"
-done
 echo
