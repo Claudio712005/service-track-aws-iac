@@ -6,7 +6,7 @@
 |---|---|
 | [001](adr/ADR-001-api-gateway-rest-vs-http.md) | API Gateway REST (v1) em vez de HTTP (v2) |
 | [002](adr/ADR-002-openapi-como-definicao-do-gateway.md) | O OpenAPI é a definição do gateway |
-| [003](adr/ADR-003-integracao-backend-eks-vpc-link.md) | Lambda por rota e EKS via VPC Link + NLB |
+| [003](adr/ADR-003-integracao-backend-eks-vpc-link.md) | Lambda por rota e EKS via VPC Link + NLB — **substituída pelo 026** |
 | [004](adr/ADR-004-fronteira-ext-terraform.md) | Fronteira entre o EXT e o Terraform |
 | [005](adr/ADR-005-autorizacao-jwt-no-backend.md) | JWT no backend, API Key controla consumo *(revisado pelo 007)* |
 | [006](adr/ADR-006-ambientes-efemeros-e-conta-educacional.md) | Ambientes efêmeros e conta educacional |
@@ -15,20 +15,22 @@
 | [009](adr/ADR-009-multiplas-api-keys-por-consumidor.md) | Uma API key por consumidor |
 | [010](adr/ADR-010-contract-testing-na-pipeline.md) | Contract testing em duas camadas |
 | [011](adr/ADR-011-rate-limiting-defesa-em-camadas.md) | Rate limiting e defesa em camadas na borda |
-| [012](adr/ADR-012-gitops-eks-nodeport.md) | Deploy por GitOps e exposição por NodePort |
+| [012](adr/ADR-012-gitops-eks-nodeport.md) | Deploy por GitOps e exposição por NodePort — **substituída pelo 026** |
 | [013](adr/ADR-013-chaves-jwt-fora-do-git.md) | Chaves JWT fora do git |
 | [014](adr/ADR-014-estrategia-de-custo-conta-estudante.md) | Estratégia de custo na conta de estudante |
-| [015](adr/ADR-015-cd-imagem-por-ambiente.md) | CD por bump de imagem, repositório ECR por ambiente |
+| [015](adr/ADR-015-cd-imagem-por-ambiente.md) | CD por bump de imagem, repositório ECR por ambiente — **substituída pelo 026** |
 | [016](adr/ADR-016-seguranca-supply-chain.md) | Segurança da cadeia de entrega da imagem |
-| [017](adr/ADR-017-acesso-a-aplicacao-apenas-pelo-gateway.md) | Acesso à aplicação apenas pelo API Gateway |
+| [017](adr/ADR-017-acesso-a-aplicacao-apenas-pelo-gateway.md) | Acesso à aplicação apenas pelo API Gateway — **substituída pelo 026** |
 | [018](adr/ADR-018-segredos-gerados-no-apply.md) | Segredos gerados no apply, não colados em secrets |
 | [019](adr/ADR-019-kubernetes-eks.md) | Orquestração com Kubernetes no Amazon EKS |
 | [020](adr/ADR-020-terraform-iac.md) | Infraestrutura como código com Terraform |
 | [021](adr/ADR-021-gitops-argocd.md) | Deploy contínuo GitOps com ArgoCD |
-| [022](adr/ADR-022-bootstrap-scripts-operacionais.md) | Bootstrap de segredos e scripts operacionais |
+| [022](adr/ADR-022-bootstrap-scripts-operacionais.md) | Bootstrap de segredos e scripts operacionais — **substituída pelo 026** |
 | [023](adr/ADR-023-dimensionamento-de-compute-por-ambiente.md) | Dimensionamento de compute por ambiente, e por que HML não tem HPA |
 | [024](adr/ADR-024-topologia-de-rede-e-tabelas-de-rota.md) | Topologia de rede, tabelas de rota e saída para a internet |
-| [025](adr/ADR-025-regras-de-security-group.md) | Regras de security group e a fronteira entre states |
+| [025](adr/ADR-025-regras-de-security-group.md) | Regras de security group e a fronteira entre states *(regras 1 a 3 revogadas pelo 026)* |
+| [026](adr/ADR-026-plataforma-sem-acoplamento-a-servicos.md) | Plataforma sem acoplamento a serviços (Fase 4) |
+| [027](adr/ADR-027-autenticacao-e-borda-desligadas-por-flag.md) | Autenticação e borda desligadas por flag |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura
@@ -50,6 +52,7 @@ deste repositório.
 
 - [diagramas/arquitetura-aws.drawio](diagramas/arquitetura-aws.drawio) — arquitetura dos dois
   ambientes: borda, VPC, EKS, RDS, esteira de entrega e legenda. Abrir em diagrams.net.
+  **Descreve a Fase 3** (monólito, VPC Link, NLB, Datadog); não reflete o `IAC-ADR-026`.
 - [acoplamentos.md](acoplamentos.md) — o que o desenho mostra mas não explica: NodePort 30080,
   inversão do ArgoCD, segredos fora do Git, HPA medido contra `requests`, SG do NLB.
 - [api-gateway/README.md](api-gateway/README.md) — guia técnico e operacional
