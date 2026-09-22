@@ -3,10 +3,16 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
-variable "lambda_image_tag" {
-  description = "Tag da imagem da Lambda de autenticacao no ECR."
-  type        = string
-  default     = "bootstrap"
+variable "habilitar_autenticacao" {
+  description = "Cria a Lambda de autenticacao e a leitura do banco. Desligada ate a modelagem de dados da Fase 4 fechar."
+  type        = bool
+  default     = false
+}
+
+variable "habilitar_borda" {
+  description = "Cria o API Gateway. Exige habilitar_autenticacao. Desligada: os microsservicos nao sao alcancaveis de fora do cluster."
+  type        = bool
+  default     = false
 }
 
 variable "lambda_extra_env" {
@@ -29,52 +35,7 @@ variable "jwt_public_key" {
 }
 
 variable "bootstrap_argocd_apps" {
-  description = "Aplica o AppProject e o app-of-apps do ArgoCD no apply. Ver modules/stack."
+  description = "Aplica o AppProject e gera as Applications dos microsservicos descobertos. Ver modules/stack."
   type        = bool
   default     = true
-}
-
-variable "app_secret_params" {
-  type      = map(string)
-  default   = {}
-  sensitive = true
-}
-
-variable "datadog_api_key" {
-  description = "Datadog API key. Vazia desliga a observabilidade do ambiente."
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "datadog_app_key" {
-  description = "Datadog application key. Necessaria para criar dashboards e monitores."
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "datadog_site" {
-  type    = string
-  default = "datadoghq.com"
-}
-
-variable "datadog_notificacao" {
-  description = "Destino dos alertas no formato do Datadog. Para e-mail, @usuario@dominio.com; para Slack, @slack-canal. Vem da secret DD_NOTIFICACAO."
-  type        = string
-  default     = ""
-}
-
-variable "unsplash_access_key" {
-  description = "Chave da API do Unsplash. Vem do secret UNSPLASH_ACCESS_KEY pela esteira."
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "resend_api_key" {
-  description = "Chave da API do Resend. Vem do secret RESEND_API_KEY pela esteira."
-  type        = string
-  sensitive   = true
-  default     = ""
 }

@@ -13,6 +13,23 @@ variable "tags" {
   default = {}
 }
 
+variable "habilitar_autenticacao" {
+  description = "Cria a Lambda de autenticacao, o ECR dela, o par RS256 e a regra 5432 no SG do banco. Exige o banco do service-track-db-infra aplicado."
+  type        = bool
+  default     = false
+}
+
+variable "habilitar_borda" {
+  description = "Cria o API Gateway a partir do contrato EXT. Exige habilitar_autenticacao, porque a unica rota publicada e o login."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.habilitar_borda || var.habilitar_autenticacao
+    error_message = "habilitar_borda exige habilitar_autenticacao: o gateway ficaria sem nenhuma integracao."
+  }
+}
+
 variable "cluster_version" {
   type    = string
   default = "1.30"
@@ -50,7 +67,7 @@ variable "argocd_expose_lb" {
 }
 
 variable "lambda_image_tag" {
-  description = "Tag da imagem da Lambda no ECR. A imagem deve ser publicada antes do apply."
+  description = "Tag da imagem da Lambda na criacao da funcao. Depois disso a esteira da Lambda publica o codigo, e o Terraform ignora image_uri."
   type        = string
   default     = "bootstrap"
 }
@@ -78,28 +95,6 @@ variable "lambda_extra_env" {
   description = "Variaveis extras da Lambda (ex.: SMALLRYE_JWT_SIGN_KEY, MP_JWT_VERIFY_PUBLICKEY com o PEM)."
   type        = map(string)
   default     = {}
-}
-
-variable "app_node_port" {
-  description = <<-EOT
-    NodePort em que o Service da aplicacao e exposto no EKS. E o contrato entre
-    este repositorio e os manifestos do Kubernetes: o Service precisa ser
-    type=NodePort com este nodePort para o NLB do API Gateway encontrar os pods.
-  EOT
-  type        = number
-  default     = 30080
-}
-
-variable "app_health_check_protocol" {
-  description = "Health check do target group do NLB: TCP (default) ou HTTP."
-  type        = string
-  default     = "TCP"
-}
-
-variable "app_health_check_path" {
-  description = "Rota de health check, usada apenas com app_health_check_protocol = HTTP."
-  type        = string
-  default     = "/"
 }
 
 variable "enable_api_access_logs" {
@@ -139,7 +134,7 @@ variable "authorizer_result_ttl_seconds" {
 }
 
 variable "bootstrap_argocd_apps" {
-  description = "Aplica o AppProject e o app-of-apps do ArgoCD no apply (GitOps). Exige kubectl e aws CLI na maquina que aplica."
+  description = "Aplica o AppProject e gera as Applications dos microsservicos descobertos. Exige kubectl e aws CLI na maquina que aplica."
   type        = bool
   default     = true
 }
@@ -149,100 +144,8 @@ variable "ecr_max_image_count" {
   default = 10
 }
 
-variable "app_secret_params" {
-  type      = map(string)
-  default   = {}
-  sensitive = true
-}
-
 variable "state_bucket" {
   description = "Bucket do backend remoto. Usado para ler o state de rede do ambiente."
   type        = string
   default     = "servicetrack-tfstate-821146464895"
-}
-
-variable "gateway_shared_secret" {
-  description = "Segredo do header x-origem-gateway. Vazio gera um automaticamente por ambiente."
-  type        = string
-  sensitive   = true
-  default     = null
-}
-
-variable "observabilidade" {
-  description = "Configuracao do Datadog por ambiente. Desabilitada nao instala agente nem cria monitores."
-  type = object({
-    habilitada             = bool
-    api_key                = string
-    app_key                = string
-    site                   = string
-    notificacao            = string
-    cluster_agent_replicas = number
-    espalhar_por_az        = bool
-    coletar_logs           = bool
-    coletar_traces         = bool
-    recursos_node_agent = object({
-      requests_cpu    = string
-      requests_memory = string
-      limits_cpu      = string
-      limits_memory   = string
-    })
-    recursos_cluster_agent = object({
-      requests_cpu    = string
-      requests_memory = string
-      limits_cpu      = string
-      limits_memory   = string
-    })
-    limite_latencia_p95_segundos = number
-    limite_erros_5xx             = number
-    limite_falhas_os             = number
-    limite_falhas_integracao     = number
-    minimo_de_pods               = number
-    limite_saturacao             = number
-    limite_uso_de_conexoes       = number
-  })
-  sensitive = true
-  default = {
-    habilitada             = false
-    api_key                = ""
-    app_key                = ""
-    site                   = "datadoghq.com"
-    notificacao            = ""
-    cluster_agent_replicas = 1
-    espalhar_por_az        = false
-    coletar_logs           = false
-    coletar_traces         = false
-    recursos_node_agent = {
-      requests_cpu    = "100m"
-      requests_memory = "256Mi"
-      limits_cpu      = "500m"
-      limits_memory   = "512Mi"
-    }
-    recursos_cluster_agent = {
-      requests_cpu    = "100m"
-      requests_memory = "128Mi"
-      limits_cpu      = "300m"
-      limits_memory   = "256Mi"
-    }
-    limite_latencia_p95_segundos = 2
-    limite_erros_5xx             = 20
-    limite_falhas_os             = 10
-    limite_falhas_integracao     = 20
-    minimo_de_pods               = 1
-    limite_saturacao             = 0.85
-    limite_uso_de_conexoes       = 0.8
-  }
-}
-
-variable "unsplash_access_key" {
-  description = "Chave da API do Unsplash. Segredo de terceiro, entregue pela esteira."
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "resend_api_key" {
-  description = "Chave da API do Resend, usada no envio de e-mail. Segredo de terceiro."
-  type        = string
-  sensitive   = true
-  default     = ""
 }
