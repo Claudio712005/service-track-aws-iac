@@ -35,12 +35,15 @@ jobs:
   destravar:
     name: Remove o lock do state
     runs-on: ubuntu-latest
+    env:
+      CONFIRMO: ${{ inputs.confirmo }}
+      STATE_ALVO: ${{ inputs.state }}
     environment:
       name: hml
     steps:
       - name: Confirmar intencao
         run: |
-          if [ "${{ inputs.confirmo }}" != "SIM" ]; then
+          if [ "$CONFIRMO" != "SIM" ]; then
             echo "::error::Digite SIM no campo de confirmacao."
             echo "::error::Remover o lock de uma execucao em andamento corrompe o state."
             exit 1
@@ -59,7 +62,7 @@ jobs:
         run: |
           CONTA="$(aws sts get-caller-identity --query Account --output text)"
           BUCKET="servicetrack-tfstate-$CONTA"
-          CHAVE="${{ inputs.state }}/terraform.tfstate.tflock"
+          CHAVE="$STATE_ALVO/terraform.tfstate.tflock"
 
           echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
           echo "chave=$CHAVE" >> "$GITHUB_OUTPUT"
@@ -83,7 +86,7 @@ jobs:
             echo ""
             echo "| Campo | Valor |"
             echo "|---|---|"
-            echo "| State | \`${{ inputs.state }}\` |"
+            echo "| State | \`$STATE_ALVO\` |"
             echo "| Bucket | \`${{ steps.unlock.outputs.bucket }}\` |"
             echo "| Lock removido | ${{ steps.unlock.outputs.removido || 'falhou antes' }} |"
             echo ""

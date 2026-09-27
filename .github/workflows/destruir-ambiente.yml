@@ -35,14 +35,18 @@ jobs:
   confirmar:
     name: "0. Confirmar a intencao"
     runs-on: ubuntu-latest
+    env:
+      ENV_ALVO: ${{ inputs.env }}
+      ESCOPO: ${{ inputs.escopo }}
+      CONFIRMO: ${{ inputs.confirmo }}
     steps:
       - name: Conferir o nome digitado
         run: |
-          if [ "${{ inputs.confirmo }}" != "${{ inputs.env }}" ]; then
-            echo "::error::Digite '${{ inputs.env }}' no campo de confirmacao."
+          if [ "$CONFIRMO" != "$ENV_ALVO" ]; then
+            echo "::error::Digite '$ENV_ALVO' no campo de confirmacao."
             exit 1
           fi
-          echo "confirmado: ${{ inputs.env }} / ${{ inputs.escopo }}"
+          echo "confirmado: $ENV_ALVO / $ESCOPO"
 
   stack:
     name: "1. Stack"
@@ -70,20 +74,23 @@ jobs:
     needs: [stack, rede]
     if: always()
     runs-on: ubuntu-latest
+    env:
+      ENV_ALVO: ${{ inputs.env }}
+      ESCOPO: ${{ inputs.escopo }}
     steps:
       - name: Consolidar
         run: |
           {
-            echo "### Destruicao de \`${{ inputs.env }}\`"
+            echo "### Destruicao de \`$ENV_ALVO\`"
             echo ""
-            echo "Escopo: **${{ inputs.escopo }}**"
+            echo "Escopo: **$ESCOPO**"
             echo ""
             echo "| Fase | Resultado |"
             echo "|---|---|"
             echo "| 1. Stack | ${{ needs.stack.result }} |"
             echo "| 2. Rede | ${{ needs.rede.result }} |"
             echo ""
-            if [ "${{ inputs.escopo }}" = "so-o-stack" ]; then
+            if [ "$ESCOPO" = "so-o-stack" ]; then
               echo "Rede e banco continuam de pe. Para retomar, rode **Subir ambiente**."
             else
               echo "O bucket de state nao e destruido: ele guarda o historico de todos"

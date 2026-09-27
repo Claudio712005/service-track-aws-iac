@@ -59,6 +59,10 @@ jobs:
   prepare:
     name: "1. Preparar (${{ inputs.env }})"
     runs-on: ubuntu-latest
+    env:
+      ENV_ALVO: ${{ inputs.env }}
+      ACAO: ${{ inputs.action }}
+      CAMADA: ${{ inputs.camada }}
     outputs:
       workdir: ${{ steps.ctx.outputs.workdir }}
       run_url: ${{ steps.ctx.outputs.run_url }}
@@ -66,7 +70,7 @@ jobs:
       - name: Resolver contexto
         id: ctx
         run: |
-          WORKDIR="iac/environments/${{ inputs.env }}"
+          WORKDIR="iac/environments/$ENV_ALVO"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "workdir=$WORKDIR" >> "$GITHUB_OUTPUT"
           echo "run_url=$RUN_URL" >> "$GITHUB_OUTPUT"
@@ -78,10 +82,10 @@ jobs:
             echo ""
             echo "| Campo | Valor |"
             echo "|---|---|"
-            echo "| Acao | \`${{ inputs.action }}\` |"
-            echo "| Ambiente | \`${{ inputs.env }}\` |"
+            echo "| Acao | \`$ACAO\` |"
+            echo "| Ambiente | \`$ENV_ALVO\` |"
             echo "| Diretorio | \`${{ steps.ctx.outputs.workdir }}\` |"
-            echo "| Camada | \`${{ inputs.camada }}\` |"
+            echo "| Camada | \`$CAMADA\` |"
             echo "| Disparado por | @${{ github.actor }} |"
             echo "| Commit | \`${{ github.sha }}\` |"
             echo "| Execucao | [ver run](${{ steps.ctx.outputs.run_url }}) |"
@@ -128,6 +132,9 @@ jobs:
     needs: [prepare, validate]
     if: inputs.camada == 'rede'
     runs-on: ubuntu-latest
+    env:
+      ENV_ALVO: ${{ inputs.env }}
+      ACAO: ${{ inputs.action }}
     environment:
       name: ${{ inputs.env }}
     defaults:
@@ -156,12 +163,12 @@ jobs:
       - name: Conferir que o banco ja foi destruido
         if: inputs.action == 'destroy'
         run: |
-          if aws ssm get-parameter --name "/servicetrack/${{ inputs.env }}/db/endpoint" >/dev/null 2>&1; then
-            echo "::error::O banco de ${{ inputs.env }} ainda existe e vive dentro desta rede."
-            echo "::error::Destrua antes pela esteira Terraform do service-track-db-infra (env=${{ inputs.env }})."
+          if aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/db/endpoint" >/dev/null 2>&1; then
+            echo "::error::O banco de $ENV_ALVO ainda existe e vive dentro desta rede."
+            echo "::error::Destrua antes pela esteira Terraform do service-track-db-infra (env=$ENV_ALVO)."
             exit 1
           fi
-          echo "banco de ${{ inputs.env }} ausente, rede pode ser destruida."
+          echo "banco de $ENV_ALVO ausente, rede pode ser destruida."
 
       - name: terraform init
         run: terraform init -input=false
@@ -170,7 +177,7 @@ jobs:
         if: inputs.action != 'apply'
         run: |
           EXTRA=()
-          if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
+          if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
           terraform plan "${EXTRA[@]}" -no-color -lock-timeout=10m -out=tfplan.bin
 
       - name: terraform apply
@@ -187,11 +194,11 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Rede de ${{ inputs.env }}"
+            echo "### Rede de $ENV_ALVO"
             echo ""
-            echo "Operacao: **${{ inputs.action }}** · Resultado: **${{ job.status }}**"
+            echo "Operacao: **$ACAO** · Resultado: **${{ job.status }}**"
             echo ""
-            echo "A rede vive em state proprio (\`servicetrack/${{ inputs.env }}-network\`)"
+            echo "A rede vive em state proprio (\`servicetrack/$ENV_ALVO-network\`)"
             echo "porque o banco e o stack a consomem por remote state."
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -200,6 +207,9 @@ jobs:
     if: inputs.camada == 'stack'
     needs: [prepare, validate]
     runs-on: ubuntu-latest
+    env:
+      ENV_ALVO: ${{ inputs.env }}
+      ACAO: ${{ inputs.action }}
     environment:
       name: ${{ inputs.env }}
     steps:
@@ -254,7 +264,7 @@ jobs:
       - name: Conferir pre-requisitos
         if: inputs.action != 'destroy'
         run: |
-          ENV="${{ inputs.env }}"
+          ENV="$ENV_ALVO"
           faltando=0
 
           if ! aws s3api head-object \
@@ -286,7 +296,7 @@ jobs:
         if: inputs.action != 'apply'
         run: |
           EXTRA=()
-          if [ "${{ inputs.action }}" = "destroy" ]; then EXTRA+=("-destroy"); fi
+          if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
           terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color -lock-timeout=10m \
             -out=tfplan.bin | tee plan.txt
           exit "${PIPESTATUS[0]}"
@@ -349,7 +359,7 @@ jobs:
         if: always() && inputs.action == 'plan'
         run: |
           {
-            echo "### 3. Plan (\`${{ inputs.action }}\`)"
+            echo "### 3. Plan (\`$ACAO\`)"
             echo "- resultado: ${{ steps.plan.outcome }}"
             echo ""
             echo "<details><summary>Ver plano</summary>"
@@ -366,7 +376,7 @@ jobs:
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           {
-            echo "### 4. Apply concluido — \`${{ inputs.env }}\`"
+            echo "### 4. Apply concluido — \`$ENV_ALVO\`"
             echo ""
             echo "| Output | Valor |"
             echo "|---|---|"
@@ -390,7 +400,7 @@ jobs:
               echo "este repositorio e publico):"
               echo ""
               echo '```bash'
-              echo "scripts/diagnostico/chave-de-api.sh ${{ inputs.env }}"
+              echo "scripts/diagnostico/chave-de-api.sh $ENV_ALVO"
               echo '```'
             else
               echo ""
@@ -423,6 +433,6 @@ jobs:
         if: always() && inputs.action == 'destroy'
         run: |
           {
-            echo "### 4. Destroy — \`${{ inputs.env }}\`"
+            echo "### 4. Destroy — \`$ENV_ALVO\`"
             echo "- ambiente destruido."
           } >> "$GITHUB_STEP_SUMMARY"

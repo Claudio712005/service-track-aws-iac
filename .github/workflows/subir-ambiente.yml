@@ -44,6 +44,8 @@ jobs:
     needs: [rede, stack]
     if: always()
     runs-on: ubuntu-latest
+    env:
+      ENV_ALVO: ${{ inputs.env }}
     environment:
       name: ${{ inputs.env }}
     steps:
@@ -60,14 +62,14 @@ jobs:
         id: enderecos
         if: needs.stack.result == 'success'
         run: |
-          URL="$(aws ssm get-parameter --name "/servicetrack/${{ inputs.env }}/api/base-url" \
+          URL="$(aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/api/base-url" \
             --query Parameter.Value --output text 2>/dev/null || echo '')"
           echo "api_url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Consolidar
         run: |
           {
-            echo "### Subida de \`${{ inputs.env }}\`"
+            echo "### Subida de \`$ENV_ALVO\`"
             echo ""
             echo "| Fase | Resultado |"
             echo "|---|---|"
@@ -84,7 +86,7 @@ jobs:
                 echo "A chave de API muda a cada recriacao. Para ler:"
                 echo ""
                 echo '```bash'
-                echo "scripts/diagnostico/chave-de-api.sh ${{ inputs.env }}"
+                echo "scripts/diagnostico/chave-de-api.sh $ENV_ALVO"
                 echo '```'
               else
                 echo "Sem borda publica neste ambiente (habilitar_borda = false)."
@@ -94,14 +96,14 @@ jobs:
               echo "### Ver os microsservicos"
               echo ""
               echo '```bash'
-              echo "aws eks update-kubeconfig --name servicetrack-${{ inputs.env }} --region us-east-1"
+              echo "aws eks update-kubeconfig --name servicetrack-$ENV_ALVO --region us-east-1"
               echo "kubectl get pods -A -l app.kubernetes.io/part-of=service-track"
               echo "kubectl -n argocd get applications"
               echo '```'
               echo ""
               echo "### Proximos passos, cada um no proprio repositorio"
               echo ""
-              echo "- **Microsservicos** com \`k8s/argocd/${{ inputs.env }}.yaml\` na \`main\` ja foram"
+              echo "- **Microsservicos** com \`k8s/argocd/$ENV_ALVO.yaml\` na \`main\` ja foram"
               echo "  registrados no ArgoCD. Cada um precisa da propria infra aplicada"
               echo "  (\`infra/terraform\`) e de uma imagem publicada no proprio ECR."
             else
@@ -109,6 +111,6 @@ jobs:
               echo "GitHub — as fases concluidas sao idempotentes."
               echo ""
               echo "Com habilitar_autenticacao = true, o stack ainda exige o banco de"
-              echo "\`${{ inputs.env }}\` aplicado pelo \`service-track-db-infra\`, depois da rede."
+              echo "\`$ENV_ALVO\` aplicado pelo \`service-track-db-infra\`, depois da rede."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
