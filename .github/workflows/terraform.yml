@@ -59,16 +59,14 @@ jobs:
   prepare:
     name: "1. Preparar (${{ inputs.env }})"
     runs-on: ubuntu-latest
-    env:
-      ENV_ALVO: ${{ inputs.env }}
-      ACAO: ${{ inputs.action }}
-      CAMADA: ${{ inputs.camada }}
     outputs:
       workdir: ${{ steps.ctx.outputs.workdir }}
       run_url: ${{ steps.ctx.outputs.run_url }}
     steps:
       - name: Resolver contexto
         id: ctx
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           WORKDIR="iac/environments/$ENV_ALVO"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -76,6 +74,10 @@ jobs:
           echo "run_url=$RUN_URL" >> "$GITHUB_OUTPUT"
 
       - name: Resumo da execucao
+        env:
+          ACAO: ${{ inputs.action }}
+          CAMADA: ${{ inputs.camada }}
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           {
             echo "## Terraform — esteira"
@@ -132,9 +134,6 @@ jobs:
     needs: [prepare, validate]
     if: inputs.camada == 'rede'
     runs-on: ubuntu-latest
-    env:
-      ENV_ALVO: ${{ inputs.env }}
-      ACAO: ${{ inputs.action }}
     environment:
       name: ${{ inputs.env }}
     defaults:
@@ -162,6 +161,8 @@ jobs:
 
       - name: Conferir que o banco ja foi destruido
         if: inputs.action == 'destroy'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           if aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/db/endpoint" >/dev/null 2>&1; then
             echo "::error::O banco de $ENV_ALVO ainda existe e vive dentro desta rede."
@@ -175,6 +176,8 @@ jobs:
 
       - name: terraform plan
         if: inputs.action != 'apply'
+        env:
+          ACAO: ${{ inputs.action }}
         run: |
           EXTRA=()
           if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
@@ -192,6 +195,9 @@ jobs:
 
       - name: Resumo
         if: always()
+        env:
+          ACAO: ${{ inputs.action }}
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           {
             echo "### Rede de $ENV_ALVO"
@@ -207,9 +213,6 @@ jobs:
     if: inputs.camada == 'stack'
     needs: [prepare, validate]
     runs-on: ubuntu-latest
-    env:
-      ENV_ALVO: ${{ inputs.env }}
-      ACAO: ${{ inputs.action }}
     environment:
       name: ${{ inputs.env }}
     steps:
@@ -263,6 +266,8 @@ jobs:
 
       - name: Conferir pre-requisitos
         if: inputs.action != 'destroy'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           ENV="$ENV_ALVO"
           faltando=0
@@ -294,6 +299,8 @@ jobs:
       - name: terraform plan
         id: plan
         if: inputs.action != 'apply'
+        env:
+          ACAO: ${{ inputs.action }}
         run: |
           EXTRA=()
           if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
@@ -357,6 +364,8 @@ jobs:
 
       - name: Resumo do plano
         if: always() && inputs.action == 'plan'
+        env:
+          ACAO: ${{ inputs.action }}
         run: |
           {
             echo "### 3. Plan (\`$ACAO\`)"
@@ -373,6 +382,8 @@ jobs:
 
       - name: Resumo do apply
         if: always() && inputs.action == 'apply'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           {
@@ -431,6 +442,8 @@ jobs:
 
       - name: Resumo do destroy
         if: always() && inputs.action == 'destroy'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           {
             echo "### 4. Destroy — \`$ENV_ALVO\`"

@@ -44,8 +44,6 @@ jobs:
     needs: [rede, stack]
     if: always()
     runs-on: ubuntu-latest
-    env:
-      ENV_ALVO: ${{ inputs.env }}
     environment:
       name: ${{ inputs.env }}
     steps:
@@ -61,12 +59,16 @@ jobs:
       - name: Ler os enderecos do ambiente
         id: enderecos
         if: needs.stack.result == 'success'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           URL="$(aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/api/base-url" \
             --query Parameter.Value --output text 2>/dev/null || echo '')"
           echo "api_url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Consolidar
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           {
             echo "### Subida de \`$ENV_ALVO\`"

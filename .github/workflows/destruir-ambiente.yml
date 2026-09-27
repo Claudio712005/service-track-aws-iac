@@ -35,12 +35,12 @@ jobs:
   confirmar:
     name: "0. Confirmar a intencao"
     runs-on: ubuntu-latest
-    env:
-      ENV_ALVO: ${{ inputs.env }}
-      ESCOPO: ${{ inputs.escopo }}
-      CONFIRMO: ${{ inputs.confirmo }}
     steps:
       - name: Conferir o nome digitado
+        env:
+          CONFIRMO: ${{ inputs.confirmo }}
+          ENV_ALVO: ${{ inputs.env }}
+          ESCOPO: ${{ inputs.escopo }}
         run: |
           if [ "$CONFIRMO" != "$ENV_ALVO" ]; then
             echo "::error::Digite '$ENV_ALVO' no campo de confirmacao."
@@ -74,11 +74,11 @@ jobs:
     needs: [stack, rede]
     if: always()
     runs-on: ubuntu-latest
-    env:
-      ENV_ALVO: ${{ inputs.env }}
-      ESCOPO: ${{ inputs.escopo }}
     steps:
       - name: Consolidar
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+          ESCOPO: ${{ inputs.escopo }}
         run: |
           {
             echo "### Destruicao de \`$ENV_ALVO\`"
