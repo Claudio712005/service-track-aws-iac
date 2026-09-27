@@ -37,6 +37,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Instalar o leitor de YAML
+        run: pip install --quiet pyyaml
+
       - name: Validar openApi.yaml
         id: spec
         run: bash scripts/validate-openapi.sh
