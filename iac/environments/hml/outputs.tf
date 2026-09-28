@@ -6,8 +6,12 @@ output "configure_kubectl" {
   value = module.stack.configure_kubectl
 }
 
-output "app_ecr_repository_url" {
-  value = module.stack.app_ecr_repository_url
+output "argocd_url" {
+  value = module.stack.argocd_url
+}
+
+output "argocd_admin_password_cmd" {
+  value = module.stack.argocd_admin_password_cmd
 }
 
 output "lambda_ecr_repository_url" {
@@ -15,21 +19,16 @@ output "lambda_ecr_repository_url" {
 }
 
 output "lambda_function_name" {
-  description = "Funcao de autenticacao. Nao tem URL propria: e invocada pelo gateway em POST /autenticacao."
+  description = "Invocada pelo gateway em POST /autenticacao. Nula com habilitar_autenticacao = false."
   value       = module.stack.lambda_function_name
+}
+
+output "jwt_public_key_parameter" {
+  value = module.stack.jwt_public_key_parameter
 }
 
 output "rds_endpoint" {
   value = module.stack.rds_endpoint
-}
-
-output "rds_jdbc_url" {
-  value = module.stack.rds_jdbc_url
-}
-
-output "db_password" {
-  value     = module.stack.db_password
-  sensitive = true
 }
 
 output "api_gateway_url" {
@@ -51,16 +50,4 @@ output "api_key_values" {
 
 output "api_key_ids" {
   value = module.stack.api_key_ids
-}
-
-output "app_backend_nlb_dns" {
-  value = module.stack.app_backend_nlb_dns
-}
-
-output "argocd_url" {
-  value = module.stack.argocd_url
-}
-
-output "argocd_admin_password_cmd" {
-  value = module.stack.argocd_admin_password_cmd
 }

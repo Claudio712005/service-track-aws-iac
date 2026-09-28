@@ -12,7 +12,7 @@ on:
         options: [hml, prd]
         default: hml
       escopo:
-        description: "O que destruir"
+        description: "O que destruir. 'tudo' exige o banco ja destruido pelo service-track-db-infra"
         required: true
         type: choice
         options:
@@ -31,91 +31,73 @@ concurrency:
   group: orquestracao-${{ inputs.env }}
   cancel-in-progress: false
 
-env:
-  IAC: Claudio712005/service-track-aws-iac
-  DB: Claudio712005/service-track-db-infra
-
 jobs:
   confirmar:
     name: "0. Confirmar a intencao"
     runs-on: ubuntu-latest
     steps:
       - name: Conferir o nome digitado
+        env:
+          CONFIRMO: ${{ inputs.confirmo }}
+          ENV_ALVO: ${{ inputs.env }}
+          ESCOPO: ${{ inputs.escopo }}
         run: |
-          if [ "${{ inputs.confirmo }}" != "${{ inputs.env }}" ]; then
-            echo "::error::Digite '${{ inputs.env }}' no campo de confirmacao."
+          if [ "$CONFIRMO" != "$ENV_ALVO" ]; then
+            echo "::error::Digite '$ENV_ALVO' no campo de confirmacao."
             exit 1
           fi
-          echo "confirmado: ${{ inputs.env }} / ${{ inputs.escopo }}"
+          echo "confirmado: $ENV_ALVO / $ESCOPO"
 
   stack:
     name: "1. Stack"
     needs: confirmar
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
-            -f action=destroy -f env="${{ inputs.env }}" -f camada=stack
-
-  banco:
-    name: "2. Banco"
-    needs: stack
-    if: inputs.escopo == 'tudo'
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          bash scripts/disparar-workflow.sh "$DB" terraform.yml \
-            -f action=destroy -f env="${{ inputs.env }}"
+    uses: ./.github/workflows/terraform.yml
+    with:
+      action: destroy
+      env: ${{ inputs.env }}
+      camada: stack
+    secrets: inherit
 
   rede:
-    name: "3. Rede"
-    needs: banco
+    name: "2. Rede"
+    needs: stack
     if: inputs.escopo == 'tudo'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
-            -f action=destroy -f env="${{ inputs.env }}" -f camada=rede
+    uses: ./.github/workflows/terraform.yml
+    with:
+      action: destroy
+      env: ${{ inputs.env }}
+      camada: rede
+    secrets: inherit
 
   resumo:
     name: "Resumo"
-    needs: [stack, banco, rede]
+    needs: [stack, rede]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Consolidar
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+          ESCOPO: ${{ inputs.escopo }}
         run: |
           {
-            echo "### Destruicao de \`${{ inputs.env }}\`"
+            echo "### Destruicao de \`$ENV_ALVO\`"
             echo ""
-            echo "Escopo: **${{ inputs.escopo }}**"
+            echo "Escopo: **$ESCOPO**"
             echo ""
             echo "| Fase | Resultado |"
             echo "|---|---|"
             echo "| 1. Stack | ${{ needs.stack.result }} |"
-            echo "| 2. Banco | ${{ needs.banco.result }} |"
-            echo "| 3. Rede | ${{ needs.rede.result }} |"
+            echo "| 2. Rede | ${{ needs.rede.result }} |"
             echo ""
-            if [ "${{ inputs.escopo }}" = "so-o-stack" ]; then
-              echo "Rede e banco continuam de pe. Para retomar, rode **Subir ambiente**"
-              echo "com \`primeira_subida: true\` — as fases 1 e 2 sao idempotentes e"
-              echo "passam em segundos."
+            if [ "$ESCOPO" = "so-o-stack" ]; then
+              echo "Rede e banco continuam de pe. Para retomar, rode **Subir ambiente**."
             else
               echo "O bucket de state nao e destruido: ele guarda o historico de todos"
               echo "os ambientes e e pre-requisito da proxima criacao."
-              echo ""
-              echo "A hosted zone do Route53 vive em state separado e nao foi tocada."
             fi
+            echo ""
+            echo "Recursos que vivem fora deste repositorio nao foram tocados: banco"
+            echo "(\`service-track-db-infra\`) e a infraestrutura de cada microsservico"
+            echo "(\`infra/terraform\` do proprio repositorio)."
           } >> "$GITHUB_STEP_SUMMARY"

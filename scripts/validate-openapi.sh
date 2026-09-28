@@ -73,11 +73,8 @@ bearer_auth_scheme = {
 
 fake = {
     "auth_lambda_uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:000000000000:function:fake/invocations",
-    "app_backend_host": "fake-nlb.elb.us-east-1.amazonaws.com",
-    "vpc_link_id": "abc123",
     "cors_options": json.dumps(cors_options),
     "bearer_auth_scheme": json.dumps(bearer_auth_scheme),
-    "gateway_shared_secret": "valor-de-teste",
 }
 
 missing = set(re.findall(r"\$\{(\w+)\}", raw)) - set(fake)

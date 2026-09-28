@@ -36,16 +36,6 @@ variable "auth_lambda_function_name" {
   type = string
 }
 
-variable "app_backend_host" {
-  description = "DNS do NLB interno que expoe a aplicacao no EKS."
-  type        = string
-}
-
-variable "vpc_link_id" {
-  description = "ID do VPC Link usado nas integracoes privadas."
-  type        = string
-}
-
 variable "enable_access_logs" {
   description = <<-EOT
     Habilita access log e execution log do stage. Exige configurar a role de
@@ -83,10 +73,4 @@ variable "authorizer_result_ttl_seconds" {
   description = "Cache do resultado do authorizer por token. 0 desliga o cache."
   type        = number
   default     = 300
-}
-
-variable "gateway_shared_secret" {
-  description = "Segredo injetado pelo gateway no header x-origem-gateway. A aplicacao recusa requisicao sem ele."
-  type        = string
-  sensitive   = true
 }

@@ -6,12 +6,12 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  description: Ordens de serviço - API ServiceTrack
+  description: ServiceTrack - microsservicos e infraestrutura GitOps
   sourceRepos:
-    - https://github.com/Claudio712005/service-track-aws-iac.git
+    - https://github.com/Claudio712005/*
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: service-track
+      namespace: "service-track-*"
     - server: https://kubernetes.default.svc
       namespace: argocd
   clusterResourceWhitelist:
@@ -48,22 +48,3 @@ spec:
       kind: Application
   orphanedResources:
     warn: true
-    ignore:
-      - kind: Secret
-        name: service-track-secret
-      - kind: Secret
-        name: service-track-jwt
-      - kind: Secret
-        name: service-track-gateway
-      - kind: Secret
-        name: db-init-creds
-      - kind: ConfigMap
-        name: service-track-runtime
-      - kind: ConfigMap
-        name: service-track-db
-      - kind: ConfigMap
-        name: db-init-script
-      - kind: ConfigMap
-        name: kube-root-ca.crt
-      - kind: Job
-        name: service-track-db-init

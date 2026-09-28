@@ -11,16 +11,6 @@ on:
         type: choice
         options: [hml, prd]
         default: hml
-      primeira_subida:
-        description: "Ambiente novo: usa a tag bootstrap na Lambda"
-        required: false
-        type: boolean
-        default: false
-      incluir_aplicacao:
-        description: "Publicar tambem a Lambda e a aplicacao"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -29,85 +19,29 @@ concurrency:
   group: orquestracao-${{ inputs.env }}
   cancel-in-progress: false
 
-env:
-  IAC: Claudio712005/service-track-aws-iac
-  DB: Claudio712005/service-track-db-infra
-  LAMBDA: Claudio712005/service-track-lambda
-  API: Claudio712005/service-track-api
-
 jobs:
   rede:
     name: "1. Rede"
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
-            -f action=apply -f env="${{ inputs.env }}" -f camada=rede
-
-  banco:
-    name: "2. Banco"
-    needs: rede
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          bash scripts/disparar-workflow.sh "$DB" terraform.yml \
-            -f action=apply -f env="${{ inputs.env }}"
+    uses: ./.github/workflows/terraform.yml
+    with:
+      action: apply
+      env: ${{ inputs.env }}
+      camada: rede
+    secrets: inherit
 
   stack:
-    name: "3. Stack"
-    needs: banco
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          TAG=latest
-          if [ "${{ inputs.primeira_subida }}" = "true" ]; then TAG=bootstrap; fi
-          bash scripts/disparar-workflow.sh "$IAC" terraform.yml \
-            -f action=apply -f env="${{ inputs.env }}" -f camada=stack \
-            -f lambda_image_tag="$TAG"
-
-  lambda:
-    name: "4. Lambda"
-    needs: stack
-    if: inputs.incluir_aplicacao
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          bash scripts/disparar-workflow.sh "$LAMBDA" cd.yml \
-            -f env="${{ inputs.env }}"
-
-  aplicacao:
-    name: "5. Aplicacao"
-    needs: lambda
-    if: inputs.incluir_aplicacao
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      GH_TOKEN: ${{ secrets.OPS_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          bash scripts/disparar-workflow.sh "$API" cd-app.yml \
-            -f env="${{ inputs.env }}"
+    name: "2. Stack"
+    needs: rede
+    uses: ./.github/workflows/terraform.yml
+    with:
+      action: apply
+      env: ${{ inputs.env }}
+      camada: stack
+    secrets: inherit
 
   resumo:
     name: "Resumo"
-    needs: [rede, banco, stack, lambda, aplicacao]
+    needs: [rede, stack]
     if: always()
     runs-on: ubuntu-latest
     environment:
@@ -125,55 +59,60 @@ jobs:
       - name: Ler os enderecos do ambiente
         id: enderecos
         if: needs.stack.result == 'success'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
-          URL="$(aws ssm get-parameter --name "/servicetrack/${{ inputs.env }}/api/base-url" \
+          URL="$(aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/api/base-url" \
             --query Parameter.Value --output text 2>/dev/null || echo '')"
           echo "api_url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Consolidar
+        env:
+          ENV_ALVO: ${{ inputs.env }}
         run: |
           {
-            echo "### Subida de \`${{ inputs.env }}\`"
+            echo "### Subida de \`$ENV_ALVO\`"
             echo ""
             echo "| Fase | Resultado |"
             echo "|---|---|"
             echo "| 1. Rede | ${{ needs.rede.result }} |"
-            echo "| 2. Banco | ${{ needs.banco.result }} |"
-            echo "| 3. Stack | ${{ needs.stack.result }} |"
-            echo "| 4. Lambda | ${{ needs.lambda.result }} |"
-            echo "| 5. Aplicacao | ${{ needs.aplicacao.result }} |"
+            echo "| 2. Stack | ${{ needs.stack.result }} |"
             echo ""
-            if [ "${{ needs.aplicacao.result }}" = "success" ]; then
-              echo "### Ambiente de pe"
+            if [ "${{ needs.stack.result }}" = "success" ]; then
+              echo "### Plataforma de pe"
               echo ""
               URL="${{ steps.enderecos.outputs.api_url }}"
               if [ -n "$URL" ]; then
-                echo "| Endereco | Valor |"
-                echo "|---|---|"
-                echo "| API | $URL |"
-                echo "| Login | \`POST $URL/autenticacao\` |"
+                echo "API: $URL"
                 echo ""
                 echo "A chave de API muda a cada recriacao. Para ler:"
                 echo ""
                 echo '```bash'
-                echo "scripts/diagnostico/chave-de-api.sh ${{ inputs.env }}"
-                echo '```'
-                echo ""
-                echo "Teste rapido, trocando CHAVE pelo valor acima:"
-                echo ""
-                echo '```bash'
-                echo "curl -s -X POST \"$URL/autenticacao\" \\"
-                echo "  -H 'x-api-key: CHAVE' -H 'Content-Type: application/json' \\"
-                echo "  -d '{\"cpf\":\"13646633093\",\"senha\":\"SENHA_DO_SEED\"}'"
+                echo "scripts/diagnostico/chave-de-api.sh $ENV_ALVO"
                 echo '```'
               else
-                echo "Nao consegui ler a URL do SSM. Ela esta no resumo da fase 3."
+                echo "Sem borda publica neste ambiente (habilitar_borda = false)."
+                echo "Os microsservicos so respondem dentro do cluster."
               fi
               echo ""
-              echo "Demais enderecos (ArgoCD, RDS, ECR) no resumo da fase 3."
+              echo "### Ver os microsservicos"
+              echo ""
+              echo '```bash'
+              echo "aws eks update-kubeconfig --name servicetrack-$ENV_ALVO --region us-east-1"
+              echo "kubectl get pods -A -l app.kubernetes.io/part-of=service-track"
+              echo "kubectl -n argocd get applications"
+              echo '```'
+              echo ""
+              echo "### Proximos passos, cada um no proprio repositorio"
+              echo ""
+              echo "- **Microsservicos** com \`k8s/argocd/$ENV_ALVO.yaml\` na \`main\` ja foram"
+              echo "  registrados no ArgoCD. Cada um precisa da propria infra aplicada"
+              echo "  (\`infra/terraform\`) e de uma imagem publicada no proprio ECR."
             else
-              echo "A sequencia parou na primeira falha. Cada fase e um job: reexecute"
-              echo "apenas a que falhou pelo botao de re-run do GitHub, ou rode tudo de"
-              echo "novo — as fases concluidas sao idempotentes."
+              echo "A sequencia parou na primeira falha. Reexecute pelo botao de re-run do"
+              echo "GitHub — as fases concluidas sao idempotentes."
+              echo ""
+              echo "Com habilitar_autenticacao = true, o stack ainda exige o banco de"
+              echo "\`$ENV_ALVO\` aplicado pelo \`service-track-db-infra\`, depois da rede."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

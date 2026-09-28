@@ -35,8 +35,7 @@ apis/service-track-api-ext/
 iac/modules/
 ├── api-gateway/       REST API, stage, deployment, usage plans, API keys, logs,
 │                      CORS de erro
-├── lambda-authorizer/ authorizer de JWT (Go, provided.al2023) + testes
-└── vpc-link/          NLB interno, target group, ASG attachment, VPC Link
+└── lambda-authorizer/ authorizer de JWT (Go, provided.al2023) + testes
 
 scripts/
 ├── validate-openapi.sh   valida o contrato (roda em push/PR)
@@ -53,13 +52,11 @@ usage-plan/*───┘                                   └─> aws_api_gatew
                                                         └─> aws_api_gateway_stage
 ```
 
-O Terraform resolve cinco placeholders no contrato durante o apply:
+O Terraform resolve três placeholders no contrato durante o apply:
 
 | Placeholder | Valor |
 |---|---|
 | `${auth_lambda_uri}` | `invoke_arn` da Lambda de autenticação |
-| `${app_backend_host}` | DNS do NLB interno |
-| `${vpc_link_id}` | ID do VPC Link |
 | `${cors_options}` | método OPTIONS montado a partir do YAML de CORS |
 | `${bearer_auth_scheme}` | `http/bearer` (ignorado) ou o authorizer de JWT, conforme `enable_jwt_authorizer` |
 
@@ -74,36 +71,27 @@ Saída esperada:
 
 ```
 OpenAPI valido
-  paths      : 36
-  operacoes  : 49 (+36 OPTIONS de preflight)
-  schemas    : 47
+  paths      : 1
+  operacoes  : 1 (+1 OPTIONS de preflight)
+  schemas    : 3
   integracoes: todas as operacoes possuem x-amazon-apigateway-integration
   path params: todos mapeados em requestParameters
 ```
 
 ## Executar HML
 
+Pela pipeline: **Actions → Subir ambiente → `env: hml`**, depois da rede e do banco (ver
+[README raiz](../../README.md#ordem-de-subida-de-um-ambiente)).
+
+Manualmente:
+
 ```bash
 cd iac/environments/hml
-
-cp terraform.tfvars.example terraform.tfvars   # ajuste tag da imagem e chaves JWT
 terraform init
-
-# Fase 1 — repositórios ECR (a Lambda usa imagem de container; ver README raiz)
-terraform apply -target=module.stack.module.ecr_lambda -target=module.stack.module.ecr_app
-
-# Fase 2 — imagem placeholder no ECR privado
-ECR_URL=$(terraform output -raw lambda_ecr_repository_url)
-bash ../../../scripts/lambda-bootstrap-image.sh "$ECR_URL" bootstrap
-
-# Fase 3 — stack completo, incluindo API Gateway, NLB e VPC Link
+terraform apply -target=module.stack.module.ecr_lambda
+bash ../../../scripts/lambda-bootstrap-image.sh "$(terraform output -raw lambda_ecr_repository_url)" bootstrap
 terraform apply
 ```
-
-Pela pipeline: **Actions → Terraform → `action: apply`, `env: hml`**. As três
-fases são executadas automaticamente.
-
-> O VPC Link leva de 5 a 10 minutos para ser criado. É o recurso mais lento.
 
 Após o apply:
 
@@ -111,7 +99,6 @@ Após o apply:
 terraform output api_gateway_url          # URL base (já inclui /hml)
 terraform output api_consumers            # consumidores habilitados
 terraform output -json api_key_values | jq -r .web   # chave do consumidor web
-terraform output app_backend_nlb_dns      # DNS do NLB interno
 ```
 
 ## Executar PRD
@@ -132,20 +119,14 @@ no código dos módulos.
 BASE=$(terraform output -raw api_gateway_url)
 KEY=$(terraform output -json api_key_values | jq -r .web)
 
-# 1. Login (Lambda) — público, mas exige API key
-TOKEN=$(curl -s -X POST "$BASE/autenticacao" \
+curl -s -X POST "$BASE/autenticacao" \
   -H "x-api-key: $KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"cpf":"12345678901","senha":"Senha@123"}' | jq -r .token)
-
-# 2. Rota autenticada (EKS via VPC Link)
-curl -s "$BASE/clientes/550e8400-e29b-41d4-a716-446655440000" \
-  -H "x-api-key: $KEY" \
-  -H "Authorization: Bearer $TOKEN"
+  -d '{"cpf":"12345678901","senha":"Senha@123"}' | jq -r .token
 ```
 
-Toda chamada precisa de `x-api-key`. Rotas autenticadas precisam também de
-`Authorization: Bearer`.
+`POST /autenticacao` é a única rota publicada (`IAC-ADR-026`). O token emitido é validado
+pelos microsserviços, com a chave pública lida de `/servicetrack/<env>/jwt-public` no SSM.
 
 ## Consumidores e API keys
 
@@ -246,13 +227,13 @@ Definido em `api-configuration/cors/config-<ENV>.yaml`.
 
 | Situação | Quem responde | Como |
 |---|---|---|
-| Preflight `OPTIONS` | **gateway** | integração `mock` injetada em todos os 36 paths |
+| Preflight `OPTIONS` | **gateway** | integração `mock` injetada em todo path |
 | Erros do gateway (403, 429, 400 de validação) | **gateway** | `aws_api_gateway_gateway_response` para `DEFAULT_4XX` / `DEFAULT_5XX` |
 | Respostas reais 2xx | **backend** | precisa enviar `Access-Control-Allow-Origin` |
 
 A terceira linha é uma limitação real do API Gateway: com integração *proxy*
 (`http_proxy` / `aws_proxy`) o gateway **não consegue** injetar headers nas
-respostas do backend. Por isso a aplicação e a Lambda precisam devolver
+respostas do backend. Por isso a Lambda precisa devolver
 `Access-Control-Allow-Origin` coerente com o `allowOrigin` configurado.
 
 Sem os headers nas respostas de erro (segunda linha), um 429 apareceria no
@@ -293,9 +274,9 @@ Exige a chave pública RS256 — reusa `lambda_extra_env.MP_JWT_VERIFY_PUBLICKEY
 ou a variável `jwt_public_key`. Sem ela o apply falha com mensagem explícita, em
 vez de subir uma API que rejeita tudo.
 
-Ao ligar, as **44 operações** que declaram `bearerAuth` passam a exigir token
-válido; as duas rotas de magic link e os preflights `OPTIONS` continuam abertos.
-Nenhuma alteração no contrato é necessária — o `securityScheme` é templatizado.
+Hoje nenhuma operação declara `bearerAuth` — a única rota é o próprio login —, então ligar o
+authorizer não muda o comportamento da API. Ele passa a valer para qualquer rota futura que
+declare `bearerAuth`, sem alteração no `securityScheme`, que é templatizado.
 
 | | Authorizer desligado (padrão) | Authorizer ligado |
 |---|---|---|
@@ -314,14 +295,7 @@ cd iac/modules/lambda-authorizer/src && go test ./...
 
 ### Rotas sem API key
 
-| Rota | Motivo |
-|---|---|
-| `GET /ordem-servico/orcamento/aprovacao` | *magic link* aberto do e-mail; navegador não envia header customizado |
-| `GET /ordem-servico/orcamento/reprovacao` | idem |
-| `OPTIONS` de qualquer path | preflight não carrega headers customizados |
-
-As duas primeiras são autorizadas pelo token dedicado na query string, que só o
-cliente dono da OS recebe.
+Só os preflights `OPTIONS`, que não carregam headers customizados.
 
 ## Validação de request
 
@@ -351,32 +325,12 @@ continua sendo responsabilidade do backend.
 
 ## Integração com os backends
 
-| Rotas | Tipo | Destino |
+| Rota | Tipo | Destino |
 |---|---|---|
-| `POST /autenticacao`, `POST /autenticacao/reset-senha` | `aws_proxy` | Lambda de autenticação |
-| Outras 47 operações | `http_proxy` + `VPC_LINK` | aplicação no EKS |
+| `POST /autenticacao` | `aws_proxy` | Lambda de autenticação |
 
-Caminho até o EKS:
-
-```
-API Gateway → VPC Link → NLB interno (:80) → NodePort 30080 → Service → pods
-```
-
-### Contrato com os manifestos do Kubernetes
-
-> O `Service` da aplicação precisa ser `type: NodePort` com `nodePort: 30080`.
-
-É o único acoplamento entre este repositório e o de manifestos. O valor é
-`var.app_node_port` em `modules/stack`. Se divergir, o target group fica
-*unhealthy* e o gateway responde 503 — o apply não falha.
-
-O health check do target group é **TCP** por padrão, para não depender de rota de
-health específica do framework. Para usar HTTP:
-
-```hcl
-app_health_check_protocol = "HTTP"
-app_health_check_path     = "/actuator/health"   # ou /q/health
-```
+Não há caminho do gateway até o EKS: VPC Link, NLB e NodePort foram removidos com o monólito
+(`IAC-ADR-026`). Como expor os microsserviços é decisão pendente.
 
 ## Observabilidade
 
@@ -387,8 +341,8 @@ Com `enable_api_access_logs = true` (padrão):
   `apiKeyId`.
 - **Execution log** no nível definido por `loggingLevel` (`INFO` em HML,
   `ERROR` em PRD).
-- **Métricas** do CloudWatch por método em HML (`detailedMetrics: true`);
-  desligadas em PRD por custo.
+- **Métricas** detalhadas por método conforme `detailedMetrics` em cada
+  `usage-plan/config-<ENV>.yaml`.
 
 Depende de uma role de CloudWatch no nível da conta
 (`aws_api_gateway_account`, usando a `LabRole`). Se a conta educacional não
@@ -431,14 +385,12 @@ REST_API_ID=$(terraform output -raw api_gateway_id) STAGE_NAME=hml \
 ```
 
 Verifica: preflight com headers de CORS, 403 sem API key, 403 com key inválida,
-CORS nas respostas de erro, 400 de request validation (body e query param),
-403 em rota inexistente e ausência de API key nos magic links.
+CORS nas respostas de erro, 400 de request validation (body vazio e CPF fora do padrão)
+e 403 em rota inexistente.
 
 Com `REST_API_ID` e `STAGE_NAME`, compara ainda as rotas publicadas na AWS
 (`aws apigateway get-export`) com o contrato versionado — detecta drift causado
 por mexida no console ou deployment atrasado.
-
-Com `EXPECT_AUTHORIZER=true`, exige 401 em rota autenticada sem Bearer válido.
 
 ## Destruir e recriar
 
@@ -454,7 +406,7 @@ terraform destroy
 Recriar:
 
 ```bash
-terraform apply -target=module.stack.module.ecr_lambda -target=module.stack.module.ecr_app
+terraform apply -target=module.stack.module.ecr_lambda
 ECR_URL=$(terraform output -raw lambda_ecr_repository_url)
 bash ../../../scripts/lambda-bootstrap-image.sh "$ECR_URL" bootstrap
 terraform apply
@@ -463,16 +415,17 @@ terraform apply
 Nenhum passo manual no console do API Gateway. Não há import, não há Usage Plan
 criado à mão, não há CORS configurado na interface.
 
-**Muda a cada recriação:** a URL (novo ID de API) e a API key. O DNS do NLB também
-muda, mas é resolvido automaticamente — ele é injetado no contrato no apply.
+**Muda a cada recriação:** a URL (novo ID de API) e a API key.
 
 ## Alterar a API
 
 ### Adicionar ou mudar uma rota
 
+Rota por microsserviço não entra aqui sem antes existir a decisão de exposição que o
+`IAC-ADR-026` deixa em aberto — senão o repositório volta a citar serviços.
+
 1. Edite `apis/service-track-api-ext/openApi.yaml`.
-2. Inclua `x-amazon-apigateway-integration` na operação (copie de uma rota
-   equivalente).
+2. Inclua `x-amazon-apigateway-integration` na operação.
 3. Se a rota tiver path parameter, mapeie em `requestParameters`.
 4. Adicione `options: ${cors_options}` no path, se for novo.
 5. `scripts/validate-openapi.sh`
@@ -482,11 +435,6 @@ muda, mas é resolvido automaticamente — ele é injetado no contrato no apply.
 
 Edite o YAML em `api-configuration/` e rode `terraform apply`.
 
-### Mudar o backend de uma rota
-
-Troque o bloco `x-amazon-apigateway-integration` da operação entre o modelo
-`aws_proxy` (Lambda) e `http_proxy`+`VPC_LINK` (EKS). Nenhuma mudança em HCL.
-
 ## Troubleshooting
 
 | Sintoma | Causa provável | Ação |
@@ -495,8 +443,7 @@ Troque o bloco `x-amazon-apigateway-integration` da operação entre o modelo
 | `401 Unauthorized` com authorizer ligado | JWT ausente, expirado, mal assinado ou emissor divergente | ver log da função `<name>-jwt-authorizer` |
 | 401 mesmo com token válido | chave pública rotacionada sem novo apply | `terraform apply` para atualizar a env var do authorizer |
 | `429 Too Many Requests` | throttle ou quota | ver `usage-plan/config-<ENV>.yaml` |
-| `503 Service Unavailable` nas rotas do EKS | target group unhealthy | conferir `nodePort: 30080` no Service e se os pods estão de pé |
-| `500` com `integration.error` no access log | backend fora do ar ou path divergente | conferir o `uri` da integração |
+| `500` com `integration.error` no access log | Lambda ainda com a imagem placeholder `:bootstrap` | rodar o CD do `service-track-lambda` |
 | Navegador diz "CORS error" num erro qualquer | resposta 2xx do backend sem `Access-Control-Allow-Origin` | o backend precisa enviar o header |
 | Apply falha em `aws_api_gateway_account` | `LabRole` não assumível por `apigateway.amazonaws.com` | `-var="enable_api_access_logs=false"` |
 | Apply falha ao importar o body | contrato inválido | `scripts/validate-openapi.sh` |

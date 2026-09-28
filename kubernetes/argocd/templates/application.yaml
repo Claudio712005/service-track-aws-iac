@@ -1,19 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: service-track-local
+  name: __REPO__-__ENV__
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: service-track
   source:
-    repoURL: https://github.com/Claudio712005/service-track-aws-iac.git
+    repoURL: https://github.com/__OWNER__/__REPO__.git
     targetRevision: main
-    path: kubernetes/k8s/overlays/local
+    path: k8s/overlays/__ENV__
   destination:
     server: https://kubernetes.default.svc
-    namespace: service-track
+    namespace: __REPO__
   syncPolicy:
     automated:
       prune: true
