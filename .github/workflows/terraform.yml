@@ -245,17 +245,26 @@ jobs:
         id: flags
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
+          ERRO="$(mktemp)"
+
           ler() {
-            echo "var.$1" | terraform -chdir=$WD console 2>/dev/null | tr -d '"' | tail -n 1
+            printf 'var.%s\n' "$1" \
+              | terraform -chdir="$WD" console -no-color 2>"$ERRO" \
+              | tr -d '"' \
+              | grep -Ex 'true|false' \
+              | tail -n 1
           }
-          AUTH="$(ler habilitar_autenticacao)"
-          BORDA="$(ler habilitar_borda)"
+
+          AUTH="$(ler habilitar_autenticacao || true)"
+          BORDA="$(ler habilitar_borda || true)"
           for v in AUTH BORDA; do
             case "${!v}" in
               true|false) ;;
               *)
                 echo "::error::Nao consegui ler as flags do ambiente com 'terraform console'."
                 echo "::error::Valor lido para $v: '${!v}'"
+                echo "::error::Saida de erro do console:"
+                sed 's/^/::error::  /' "$ERRO"
                 exit 1
                 ;;
             esac
