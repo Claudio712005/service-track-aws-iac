@@ -3,6 +3,12 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
+variable "argocd_expose_lb" {
+  description = "Expor o argocd-server por LoadBalancer. Escolhido por execucao da esteira; sem escolha vale o padrao deste ambiente."
+  type        = bool
+  default     = true
+}
+
 variable "habilitar_autenticacao" {
   description = "Cria a Lambda de autenticacao e a leitura do banco. Desligada ate a modelagem de dados da Fase 4 fechar."
   type        = bool
