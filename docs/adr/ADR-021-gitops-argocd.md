@@ -31,7 +31,9 @@ com acesso total ao cluster dentro da pipeline, não havia rollback declarativo 
 Adotar **GitOps pull-based com ArgoCD** como mecanismo de deploy em produção:
 
 - **Instalação:** chart `argo-cd` 7.7.0 via Terraform/Helm (ADR-020), com `server.insecure=true`
-  atrás de Service LoadBalancer.
+  atrás de Service LoadBalancer. **`server.insecure=true` foi revogado pelo
+  [ADR-031](ADR-031-tls-proprio-do-argocd.md):** o servidor passou a servir o próprio TLS, porque
+  com a interface exposta a senha do admin trafegava em texto claro.
 - **AppProject `service-track`:** restringe repositório de origem, namespaces de destino e kinds
   permitidos (whitelist); `orphanedResources.warn` habilitado com `ignore` explícito para os
   recursos criados pelo bootstrap fora do Git (ADR-022).

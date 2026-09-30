@@ -73,10 +73,9 @@ docs/                  ADRs, RFCs, guia do gateway e diagramas
   Escolher `sim` em `hml` torna `scripts/aws-lb-cleanup.sh` obrigatório antes de destruir a
   rede: LoadBalancer criado pelo Kubernetes deixa ELB e ENI órfãos que travam a remoção da VPC.
 
-  **O acesso é por `http://`, não `https://`.** O `argocd-server` roda com `server.insecure=true`
-  (`IAC-ADR-021`) e o LoadBalancer é TCP puro: a porta 443 carrega HTTP em texto claro e o
-  handshake TLS falha. Consequência a considerar antes de expor: o login trafega sem criptografia
-  num endereço público. Questão em aberto em `IAC-RFC-009`.
+  O acesso é `https://`, com **certificado autoassinado** gerado pelo próprio ArgoCD
+  (`IAC-ADR-031`): o navegador avisa, e a CLI precisa de `argocd login <lb> --insecure`.
+  Certificado válido exigiria nome de DNS e ACM, o que HML não tem.
 - **Descoberta de microsserviços** — no fim de todo `apply`,
   `scripts/argocd-bootstrap-apply.sh` aplica o `AppProject` e gera uma `Application` para
   cada repositório do owner que tenha `k8s/argocd/<ambiente>.yaml` na `main`.

@@ -32,11 +32,6 @@ resource "helm_release" "argocd" {
   create_namespace = true
 
   set {
-    name  = "configs.params.server\\.insecure"
-    value = "true"
-  }
-
-  set {
     name  = "server.service.type"
     value = var.argocd_expose_lb ? "LoadBalancer" : "ClusterIP"
   }

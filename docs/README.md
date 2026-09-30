@@ -34,6 +34,7 @@
 | [028](adr/ADR-028-senha-do-argocd-por-secret-da-esteira.md) | Senha do admin do ArgoCD vem do secret da esteira |
 | [029](adr/ADR-029-conta-aws-derivada-de-quem-esta-logado.md) | Nenhum identificador de conta AWS escrito no código |
 | [030](adr/ADR-030-exposicao-do-argocd-escolhida-por-execucao.md) | Exposição do ArgoCD escolhida na execução da esteira |
+| [031](adr/ADR-031-tls-proprio-do-argocd.md) | O ArgoCD serve o próprio TLS *(revoga o `server.insecure` do 021)* |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura
