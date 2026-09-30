@@ -60,8 +60,11 @@ cada um preservando o comportamento anterior.
 - **Quem escolhe `sim` assume o `aws-lb-cleanup.sh`.** Sem ele, o `destroy` da rede falha. O
   script já era obrigatório no ritual; com a exposição opcional, ele passa a ser condicionalmente
   crítico em HML também.
-- O resumo da esteira continua imprimindo a URL quando ela existe e o comando de `port-forward`
-  quando não existe. Nada a mudar ali: ele já decide pelo output.
+- **O resumo distingue três situações**, porque duas delas eram indistinguíveis antes: sem
+  LoadBalancer, LoadBalancer criado com endereço ainda provisionando, e endereço pronto. O
+  output `argocd_url` do Terraform é lido no mesmo apply que cria o LoadBalancer, e um ELB leva
+  de um a três minutos para receber nome — então o output sai vazio mesmo quando o recurso
+  existe. Depois do apply a esteira consulta o Service e espera o endereço por até três minutos.
 - PRD segue com LoadBalancer por padrão. Desligar lá passou a ser possível (`nao`), o que antes
   exigia alteração de código.
 
