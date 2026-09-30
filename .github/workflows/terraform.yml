@@ -198,8 +198,6 @@ jobs:
 
       - name: terraform apply
         if: inputs.action == 'apply'
-        env:
-          ARGOCD_ADMIN_PASSWORD: ${{ secrets.ARGOCD_ADMIN_PASSWORD }}
         run: terraform apply -no-color -auto-approve -lock-timeout=10m
 
       - name: terraform destroy
@@ -383,6 +381,7 @@ jobs:
         if: inputs.action == 'apply'
         env:
           VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
+          ARGOCD_ADMIN_PASSWORD: ${{ secrets.ARGOCD_ADMIN_PASSWORD }}
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           EXTRA=()
