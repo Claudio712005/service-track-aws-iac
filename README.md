@@ -223,12 +223,15 @@ não o código. Até o CD rodar, `POST /autenticacao` responde erro.
 Manualmente:
 
 ```bash
+bash scripts/tf-init.sh stack hml
 cd iac/environments/hml
-terraform init
 terraform apply -target=module.stack.module.ecr_lambda
 bash ../../../scripts/lambda-bootstrap-image.sh "$(terraform output -raw lambda_ecr_repository_url)" bootstrap
 terraform apply
 ```
+
+O `init` vai pelo `scripts/tf-init.sh` porque o backend é parcial: o nome do bucket de state
+sai da conta em que você está logado, e não existe conta escrita no código. Ver `IAC-ADR-029`.
 
 ## Diferenças entre ambientes
 

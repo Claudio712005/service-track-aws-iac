@@ -145,7 +145,7 @@ variable "ecr_max_image_count" {
 }
 
 variable "state_bucket" {
-  description = "Bucket do backend remoto. Usado para ler o state de rede do ambiente."
+  description = "Bucket do backend remoto, de onde vem o state de rede. Vazio deriva de servicetrack-tfstate-<conta>."
   type        = string
-  default     = "servicetrack-tfstate-821146464895"
+  default     = ""
 }
