@@ -30,6 +30,15 @@ on:
         options:
           - rede
           - stack
+      expor_argocd:
+        description: "Expor o ArgoCD por LoadBalancer (so vale na camada stack)"
+        required: false
+        type: choice
+        default: padrao
+        options:
+          - padrao
+          - sim
+          - nao
   workflow_call:
     inputs:
       action:
@@ -41,6 +50,10 @@ on:
       camada:
         required: true
         type: string
+      expor_argocd:
+        required: false
+        type: string
+        default: padrao
 
 permissions:
   contents: read
@@ -174,20 +187,51 @@ jobs:
       - name: terraform init
         run: terraform init -input=false -backend-config="bucket=$BUCKET_DE_STATE"
 
+      - name: Definir a exposicao do ArgoCD
+        id: argocd
+        env:
+          ESCOLHA: ${{ inputs.expor_argocd }}
+          CAMADA: ${{ inputs.camada }}
+        run: |
+          VAR=""
+          if [ "$CAMADA" = "stack" ]; then
+            case "$ESCOLHA" in
+              sim) VAR="-var=argocd_expose_lb=true" ;;
+              nao) VAR="-var=argocd_expose_lb=false" ;;
+              padrao|"") VAR="" ;;
+              *)
+                echo "::error::expor_argocd aceita padrao, sim ou nao. Recebido: '$ESCOLHA'"
+                exit 1
+                ;;
+            esac
+          fi
+          echo "var=$VAR" >> "$GITHUB_OUTPUT"
+          if [ -n "$VAR" ]; then
+            echo "exposicao do ArgoCD escolhida nesta execucao: $ESCOLHA"
+          else
+            echo "exposicao do ArgoCD: padrao do ambiente"
+          fi
+
       - name: terraform plan
         if: inputs.action != 'apply'
         env:
           ACAO: ${{ inputs.action }}
+          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
         run: |
           EXTRA=()
           if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
+          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
           terraform plan "${EXTRA[@]}" -no-color -lock-timeout=10m -out=tfplan.bin
 
       - name: terraform apply
         if: inputs.action == 'apply'
         env:
           ARGOCD_ADMIN_PASSWORD: ${{ secrets.ARGOCD_ADMIN_PASSWORD }}
-        run: terraform apply -no-color -auto-approve -lock-timeout=10m
+          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
+        run: |
+          EXTRA=()
+          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
+          terraform apply "${EXTRA[@]}" -no-color -auto-approve -lock-timeout=10m
 
       - name: terraform destroy
         if: inputs.action == 'destroy'
