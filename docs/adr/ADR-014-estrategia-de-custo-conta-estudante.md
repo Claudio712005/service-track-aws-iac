@@ -44,7 +44,7 @@ mensal.
 
 | Corte | Onde | Economia |
 |---|---|---|
-| HML sem LoadBalancer do ArgoCD | `argocd_expose_lb=false` | ~US$ 16/mês |
+| HML sem LoadBalancer do ArgoCD | `argocd_expose_lb=false` | ~US$ 16/mês *(virou padrão do ambiente, escolhível por execução — ver [ADR-030](ADR-030-exposicao-do-argocd-escolhida-por-execucao.md))* |
 | HML sem métricas detalhadas do API Gateway | `detailedMetrics=false` | até ~US$ 100/mês |
 | WAF só em PRD | `waf.enabled` por ambiente | ~US$ 6/mês em HML |
 | Domínio próprio removido | `ADR-008` revogada | hosted zone e ACM evitados nos dois ambientes |

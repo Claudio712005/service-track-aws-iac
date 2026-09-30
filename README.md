@@ -66,8 +66,12 @@ docs/                  ADRs, RFCs, guia do gateway e diagramas
 - **EKS** (`modules/eks`) — cluster com endpoint público e node group nas subnets privadas.
   Usa a role `LabRole` da conta (AWS Academy).
 - **Addons** (`modules/addons`) — ArgoCD e metrics-server via Helm, nos dois ambientes. O
-  metrics-server habilita o HPA dos microsserviços. Em `prd` a UI do ArgoCD fica atrás de um
-  LoadBalancer; em `hml`, só por port-forward.
+  metrics-server habilita o HPA dos microsserviços. A UI do ArgoCD atrás de LoadBalancer é
+  **escolha de cada execução** da esteira, no campo `expor_argocd`: `padrao` usa o padrão do
+  ambiente (`hml` sem, `prd` com), `sim` cria o LoadBalancer e `nao` remove. Ver `IAC-ADR-030`.
+
+  Escolher `sim` em `hml` torna `scripts/aws-lb-cleanup.sh` obrigatório antes de destruir a
+  rede: LoadBalancer criado pelo Kubernetes deixa ELB e ENI órfãos que travam a remoção da VPC.
 - **Descoberta de microsserviços** — no fim de todo `apply`,
   `scripts/argocd-bootstrap-apply.sh` aplica o `AppProject` e gera uma `Application` para
   cada repositório do owner que tenha `k8s/argocd/<ambiente>.yaml` na `main`.
@@ -240,7 +244,7 @@ sai da conta em que você está logado, e não existe conta escrita no código. 
 | Nodes EKS | `t3.medium` ×1 | `t3.medium` ×2 |
 | Autenticação e borda | desligadas | desligadas |
 | Memória da Lambda | 512 MB | 1024 MB |
-| LoadBalancer do ArgoCD | não (port-forward) | sim |
+| LoadBalancer do ArgoCD (padrão, alterável por execução) | não (port-forward) | sim |
 | State (key S3) | `servicetrack/hml` | `servicetrack/prd` |
 
 Throttling, quota, retenção de log e WAF do gateway vêm de
