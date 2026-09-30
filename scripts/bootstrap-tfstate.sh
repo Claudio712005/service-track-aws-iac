@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REGIAO="${AWS_REGION:-us-east-1}"
-ESPERADO="821146464895"
+SOMENTE_NOME="${1:-}"
 
 log() { echo ">> $*"; }
 erro() { echo "!! $*" >&2; }
@@ -13,17 +13,13 @@ CONTA="$(aws sts get-caller-identity --query Account --output text)"
 BUCKET="servicetrack-tfstate-${CONTA}"
 
 log "conta AWS atual: $CONTA"
+log "bucket de state: $BUCKET"
 
-if [ "$CONTA" != "$ESPERADO" ]; then
-  erro "a conta mudou: o codigo referencia $ESPERADO e voce esta em $CONTA."
-  erro "o nome do bucket esta fixado nos dois repositorios. Atualize antes de aplicar:"
-  erro ""
-  erro "  cd .. && grep -rl 'servicetrack-tfstate-${ESPERADO}' \\"
-  erro "    service-track-aws-iac service-track-db-infra --include='*.tf' --include='*.yml' \\"
-  erro "    | xargs sed -i '' 's/servicetrack-tfstate-${ESPERADO}/servicetrack-tfstate-${CONTA}/g'"
-  erro ""
-  erro "Depois atualize ESPERADO neste script e commite as duas mudancas."
-  exit 1
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "BUCKET_DE_STATE=$BUCKET" >> "$GITHUB_ENV"
+fi
+if [ "$SOMENTE_NOME" = "--somente-nome" ]; then
+  exit 0
 fi
 
 if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
