@@ -187,51 +187,20 @@ jobs:
       - name: terraform init
         run: terraform init -input=false -backend-config="bucket=$BUCKET_DE_STATE"
 
-      - name: Definir a exposicao do ArgoCD
-        id: argocd
-        env:
-          ESCOLHA: ${{ inputs.expor_argocd }}
-          CAMADA: ${{ inputs.camada }}
-        run: |
-          VAR=""
-          if [ "$CAMADA" = "stack" ]; then
-            case "$ESCOLHA" in
-              sim) VAR="-var=argocd_expose_lb=true" ;;
-              nao) VAR="-var=argocd_expose_lb=false" ;;
-              padrao|"") VAR="" ;;
-              *)
-                echo "::error::expor_argocd aceita padrao, sim ou nao. Recebido: '$ESCOLHA'"
-                exit 1
-                ;;
-            esac
-          fi
-          echo "var=$VAR" >> "$GITHUB_OUTPUT"
-          if [ -n "$VAR" ]; then
-            echo "exposicao do ArgoCD escolhida nesta execucao: $ESCOLHA"
-          else
-            echo "exposicao do ArgoCD: padrao do ambiente"
-          fi
-
       - name: terraform plan
         if: inputs.action != 'apply'
         env:
           ACAO: ${{ inputs.action }}
-          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
         run: |
           EXTRA=()
           if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
-          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
           terraform plan "${EXTRA[@]}" -no-color -lock-timeout=10m -out=tfplan.bin
 
       - name: terraform apply
         if: inputs.action == 'apply'
         env:
           ARGOCD_ADMIN_PASSWORD: ${{ secrets.ARGOCD_ADMIN_PASSWORD }}
-          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
-        run: |
-          EXTRA=()
-          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
-          terraform apply "${EXTRA[@]}" -no-color -auto-approve -lock-timeout=10m
+        run: terraform apply -no-color -auto-approve -lock-timeout=10m
 
       - name: terraform destroy
         if: inputs.action == 'destroy'
@@ -349,14 +318,37 @@ jobs:
           CLUSTER_NAME: servicetrack-${{ inputs.env }}
         run: bash scripts/aws-lb-cleanup.sh
 
+      - name: Definir a exposicao do ArgoCD
+        id: argocd
+        env:
+          ESCOLHA: ${{ inputs.expor_argocd }}
+        run: |
+          case "$ESCOLHA" in
+            sim) VAR="-var=argocd_expose_lb=true" ;;
+            nao) VAR="-var=argocd_expose_lb=false" ;;
+            padrao|"") VAR="" ;;
+            *)
+              echo "::error::expor_argocd aceita padrao, sim ou nao. Recebido: '$ESCOLHA'"
+              exit 1
+              ;;
+          esac
+          echo "var=$VAR" >> "$GITHUB_OUTPUT"
+          if [ -n "$VAR" ]; then
+            echo "exposicao do ArgoCD nesta execucao: $ESCOLHA"
+          else
+            echo "exposicao do ArgoCD: padrao do ambiente"
+          fi
+
       - name: terraform plan
         id: plan
         if: inputs.action != 'apply'
         env:
           ACAO: ${{ inputs.action }}
+          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
         run: |
           EXTRA=()
           if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
+          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
           terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color -lock-timeout=10m \
             -out=tfplan.bin | tee plan.txt
           exit "${PIPESTATUS[0]}"
@@ -371,9 +363,13 @@ jobs:
 
       - name: Apply fase 1 — ECR da Lambda
         if: inputs.action == 'apply' && steps.flags.outputs.auth == 'true'
+        env:
+          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
-          terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m \
+          EXTRA=()
+          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
+          terraform -chdir=$WD apply "${EXTRA[@]}" -no-color -auto-approve -lock-timeout=10m \
             -target=module.stack.module.ecr_lambda
 
       - name: Seed da imagem placeholder da Lambda
@@ -385,13 +381,44 @@ jobs:
 
       - name: Apply fase 3 — stack completo
         if: inputs.action == 'apply'
+        env:
+          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
-          terraform -chdir=$WD apply -no-color -auto-approve -lock-timeout=10m
+          EXTRA=()
+          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
+          terraform -chdir=$WD apply "${EXTRA[@]}" -no-color -auto-approve -lock-timeout=10m
 
       - name: terraform destroy (aplica plano)
         if: inputs.action == 'destroy'
         run: terraform -chdir=${{ needs.prepare.outputs.workdir }} apply -no-color -lock-timeout=10m tfplan.bin
+
+      - name: Descobrir o endereco do ArgoCD
+        if: inputs.action == 'apply'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+        run: |
+          aws eks update-kubeconfig --name "servicetrack-$ENV_ALVO" --region "$AWS_REGION" >/dev/null
+
+          TIPO="$(kubectl -n argocd get svc argocd-server -o jsonpath='{.spec.type}' 2>/dev/null || echo desconhecido)"
+          echo "ARGOCD_TIPO_DE_SERVICE=$TIPO" >> "$GITHUB_ENV"
+          echo "service do argocd-server: $TIPO"
+
+          if [ "$TIPO" != "LoadBalancer" ]; then
+            exit 0
+          fi
+
+          for _ in $(seq 1 18); do
+            HOST="$(kubectl -n argocd get svc argocd-server \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo '')"
+            if [ -n "$HOST" ]; then
+              echo "ARGOCD_ENDERECO=https://$HOST" >> "$GITHUB_ENV"
+              echo "endereco do ArgoCD: https://$HOST"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::O LoadBalancer do ArgoCD foi criado mas ainda nao tem endereco depois de 3 minutos."
 
       - name: Coletar outputs
         id: outputs
@@ -452,8 +479,11 @@ jobs:
             echo "| ECR Lambda | $(terraform -chdir=$WD output -raw lambda_ecr_repository_url 2>/dev/null || echo '-') |"
             echo "| Lambda de autenticacao | $(terraform -chdir=$WD output -raw lambda_function_name 2>/dev/null || echo '-') |"
             ARGO_URL="$(terraform -chdir=$WD output -raw argocd_url 2>/dev/null || echo '')"
+            if [ -z "$ARGO_URL" ]; then ARGO_URL="${ARGOCD_ENDERECO:-}"; fi
             if [ -n "$ARGO_URL" ]; then
               echo "| ArgoCD | $ARGO_URL |"
+            elif [ "${ARGOCD_TIPO_DE_SERVICE:-}" = "LoadBalancer" ]; then
+              echo "| ArgoCD | LoadBalancer criado, endereco ainda provisionando: \`kubectl -n argocd get svc argocd-server\` |"
             else
               echo "| ArgoCD | sem LoadBalancer neste ambiente, use port-forward |"
             fi
