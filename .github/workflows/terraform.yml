@@ -411,8 +411,8 @@ jobs:
             HOST="$(kubectl -n argocd get svc argocd-server \
               -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo '')"
             if [ -n "$HOST" ]; then
-              echo "ARGOCD_ENDERECO=https://$HOST" >> "$GITHUB_ENV"
-              echo "endereco do ArgoCD: https://$HOST"
+              echo "ARGOCD_ENDERECO=http://$HOST" >> "$GITHUB_ENV"
+              echo "endereco do ArgoCD: http://$HOST"
               exit 0
             fi
             sleep 10

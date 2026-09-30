@@ -51,6 +51,7 @@ deste repositório.
 - [RFC-006](rfc/RFC-006-dimensionamento-de-compute.md) — dimensionamento de compute por ambiente
 - [RFC-007](rfc/RFC-007-topologia-de-rede.md) — topologia de rede, rotas e saída para a internet
 - [RFC-008](rfc/RFC-008-regras-de-security-group.md) — regras de security group
+- [RFC-009](rfc/RFC-009-tls-na-interface-do-argocd.md) — TLS na interface do ArgoCD exposta **(em aberto)**
 
 ## Diagramas
 
