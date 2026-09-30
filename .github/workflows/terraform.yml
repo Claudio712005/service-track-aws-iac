@@ -172,7 +172,7 @@ jobs:
           echo "banco de $ENV_ALVO ausente, rede pode ser destruida."
 
       - name: terraform init
-        run: terraform init -input=false
+        run: terraform init -input=false -backend-config="bucket=$BUCKET_DE_STATE"
 
       - name: terraform plan
         if: inputs.action != 'apply'
@@ -239,7 +239,7 @@ jobs:
         run: bash scripts/bootstrap-tfstate.sh
 
       - name: terraform init
-        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init -input=false
+        run: terraform -chdir=${{ needs.prepare.outputs.workdir }} init -input=false -backend-config="bucket=$BUCKET_DE_STATE"
 
       - name: Ler as flags do ambiente
         id: flags
@@ -273,7 +273,7 @@ jobs:
           faltando=0
 
           if ! aws s3api head-object \
-                --bucket servicetrack-tfstate-821146464895 \
+                --bucket "$BUCKET_DE_STATE" \
                 --key "servicetrack/$ENV-network/terraform.tfstate" >/dev/null 2>&1; then
             echo "::error::A rede de $ENV nao foi aplicada."
             echo "::error::Rode antes: Actions -> Terraform -> apply, camada=rede, env=$ENV"
