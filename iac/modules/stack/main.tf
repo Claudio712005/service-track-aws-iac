@@ -19,7 +19,7 @@ locals {
   jwt_private_key_pem = one(tls_private_key.jwt[*].private_key_pem_pkcs8)
   jwt_public_key_pem  = one(tls_private_key.jwt[*].public_key_pem)
 
-  jwt_public_key = coalesce(var.jwt_public_key, local.jwt_public_key_pem)
+  jwt_public_key = var.jwt_public_key != null ? var.jwt_public_key : local.jwt_public_key_pem
 
   lambda_env = merge(
     {
@@ -208,7 +208,7 @@ module "jwt_authorizer" {
   name               = "${local.name}-jwt-authorizer"
   tags               = local.tags
   lab_role_arn       = data.aws_iam_role.lab.arn
-  jwt_public_key     = local.jwt_public_key
+  jwt_public_key     = local.jwt_public_key != null ? local.jwt_public_key : ""
   jwt_issuer         = var.jwt_issuer
   jwt_leeway_seconds = var.jwt_leeway_seconds
 }
