@@ -11,6 +11,12 @@ on:
         type: choice
         options: [hml, prd]
         default: hml
+      expor_argocd:
+        description: "Expor o ArgoCD por LoadBalancer"
+        required: false
+        type: choice
+        options: [padrao, sim, nao]
+        default: padrao
 
 permissions:
   contents: read
@@ -37,6 +43,7 @@ jobs:
       action: apply
       env: ${{ inputs.env }}
       camada: stack
+      expor_argocd: ${{ inputs.expor_argocd }}
     secrets: inherit
 
   resumo:

@@ -33,6 +33,7 @@
 | [027](adr/ADR-027-autenticacao-e-borda-desligadas-por-flag.md) | Autenticação e borda desligadas por flag |
 | [028](adr/ADR-028-senha-do-argocd-por-secret-da-esteira.md) | Senha do admin do ArgoCD vem do secret da esteira |
 | [029](adr/ADR-029-conta-aws-derivada-de-quem-esta-logado.md) | Nenhum identificador de conta AWS escrito no código |
+| [030](adr/ADR-030-exposicao-do-argocd-escolhida-por-execucao.md) | Exposição do ArgoCD escolhida na execução da esteira |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura

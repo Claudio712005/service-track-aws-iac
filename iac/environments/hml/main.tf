@@ -10,7 +10,7 @@ module "stack" {
   node_min_size       = 1
   node_max_size       = 1
 
-  argocd_expose_lb      = false
+  argocd_expose_lb      = var.argocd_expose_lb
   bootstrap_argocd_apps = var.bootstrap_argocd_apps
 
   habilitar_autenticacao = var.habilitar_autenticacao
