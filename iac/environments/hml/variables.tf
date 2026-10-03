@@ -45,3 +45,9 @@ variable "bootstrap_argocd_apps" {
   type        = bool
   default     = true
 }
+
+variable "habilitar_api_interna" {
+  description = "Cria a API Gateway privada que expoe os microsservicos ao BFF. Ver IAC-ADR-033."
+  type        = bool
+  default     = false
+}

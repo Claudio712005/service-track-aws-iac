@@ -12,9 +12,19 @@ locals {
 
   autenticacao = var.habilitar_autenticacao ? 1 : 0
   borda        = var.habilitar_borda ? 1 : 0
+  api_interna  = var.habilitar_api_interna ? 1 : 0
 
   api_ext_dir = "${path.module}/../../../apis/service-track-api-ext"
+  api_int_dir = "${path.module}/../../../apis/service-track-api-int"
   env_suffix  = upper(var.environment)
+
+  servicos_internos = [
+    for s in yamldecode(file("${local.api_int_dir}/servicos-${local.env_suffix}.yaml")).servicos : {
+      nome      = s.nome
+      node_port = s.nodePort
+      saude     = s.saude
+    }
+  ]
 
   jwt_private_key_pem = one(tls_private_key.jwt[*].private_key_pem_pkcs8)
   jwt_public_key_pem  = one(tls_private_key.jwt[*].public_key_pem)
@@ -234,6 +244,34 @@ module "api_gateway" {
 
   enable_access_logs  = var.enable_api_access_logs
   cloudwatch_role_arn = data.aws_iam_role.lab.arn
+}
+
+module "api_interna" {
+  source = "../api-interna"
+  count  = local.api_interna
+
+  name        = var.project
+  environment = var.environment
+  region      = data.aws_region.current.name
+  tags        = local.tags
+
+  vpc_id             = local.vpc_id
+  private_subnet_ids = local.private_subnet_ids
+
+  node_security_group_id = module.eks.cluster_security_group_id
+  node_asg_names         = module.eks.node_group_asg_names
+  node_asg_count         = var.node_asg_count
+
+  servicos = local.servicos_internos
+}
+
+resource "aws_ssm_parameter" "api_interna_base_url" {
+  count = local.api_interna
+
+  name  = "/${var.project}/${var.environment}/api-interna/base-url"
+  type  = "String"
+  value = module.api_interna[0].url_privada
+  tags  = local.tags
 }
 
 resource "aws_ssm_parameter" "api_base_url" {

@@ -149,3 +149,15 @@ variable "state_bucket" {
   type        = string
   default     = ""
 }
+
+variable "habilitar_api_interna" {
+  description = "Cria a API Gateway privada, o NLB interno e o VPC Link que expoem os microsservicos listados em apis/service-track-api-int. Exige o Service type=NodePort no repo de cada servico. Ver IAC-ADR-033."
+  type        = bool
+  default     = false
+}
+
+variable "node_asg_count" {
+  description = "Quantidade de ASG do node group. Precisa ser conhecida no plan para dimensionar os anexos ao target group; o node group gerenciado cria um."
+  type        = number
+  default     = 1
+}
