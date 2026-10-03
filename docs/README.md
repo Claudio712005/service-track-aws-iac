@@ -35,6 +35,7 @@
 | [029](adr/ADR-029-conta-aws-derivada-de-quem-esta-logado.md) | Nenhum identificador de conta AWS escrito no código |
 | [030](adr/ADR-030-exposicao-do-argocd-escolhida-por-execucao.md) | Exposição do ArgoCD escolhida na execução da esteira |
 | [031](adr/ADR-031-tls-proprio-do-argocd.md) | O ArgoCD serve o próprio TLS *(revoga o `server.insecure` do 021)* |
+| [032](adr/ADR-032-regra-de-sql-injection-no-waf.md) | Regra gerenciada de SQL injection no WAF, e WAF também em HML |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura
