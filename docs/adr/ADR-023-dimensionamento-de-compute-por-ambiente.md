@@ -50,7 +50,19 @@ Fórmula do VPC CNI: `ENIs × (IPv4 por ENI − 1) + 2`.
 
 ## Decisão
 
-### HML: um `t3.medium`, sem HPA, teto de 1 node
+### HML: um `t3.large`, sem HPA, teto de 1 node
+
+> **Correção de 03/10/2026.** Passa de `t3.medium` para `t3.large`. O alvo da Fase 4 não cabe em 17
+> slots: os ocupantes fixos somam 12 — `coredns` 2, `aws-node` 1, `kube-proxy` 1, `metrics-server` 1
+> e ArgoCD 7, já descontado o Datadog, que saiu — e o alvo acrescenta oito pods (catálogo, Mongo,
+> usuários e veículos, Redis, broker, BFF, pagamentos e Alloy), chegando a 20. O `t3.large` entrega
+> 35 slots e 8 GiB, contra 17 slots e 4 GiB. O sintoma de estourar o slot é `Pending` com
+> `Insufficient pods`, que não parece erro de aplicação e já custou quinze minutos de apply preso
+> uma vez.
+>
+> O custo foi aceito com a conta do uso real: o ambiente roda duas a três horas por dia e é
+> destruído. `t3.large` custa cerca de US$ 0,083 por hora contra US$ 0,042 do `t3.medium` — em
+> noventa horas por mês, **cerca de US$ 3,70 a mais**, dentro do orçamento de US$ 50.
 
 > **Correção de 02/09/2026.** A tabela abaixo dizia `t3.small` e omitia o ArgoCD, que o módulo
 > `addons` instala por padrão — o chart completo sobe application-controller, applicationset,

@@ -46,7 +46,7 @@ mensal.
 |---|---|---|
 | HML sem LoadBalancer do ArgoCD | `argocd_expose_lb=false` | ~US$ 16/mês *(virou padrão do ambiente, escolhível por execução — ver [ADR-030](ADR-030-exposicao-do-argocd-escolhida-por-execucao.md))* |
 | HML sem métricas detalhadas do API Gateway | `detailedMetrics=false` | até ~US$ 100/mês |
-| WAF só em PRD | `waf.enabled` por ambiente | ~US$ 6/mês em HML |
+| WAF só em PRD | `waf.enabled` por ambiente | ~US$ 6/mês em HML *(revogado pelo [ADR-032](ADR-032-regra-de-sql-injection-no-waf.md): com uso de três horas por dia o WAF em HML custa menos de US$ 1/mês, e regra de segurança não exercitada é regra que falha na apresentação)* |
 | Domínio próprio removido | `ADR-008` revogada | hosted zone e ACM evitados nos dois ambientes |
 | Retenção de logs curta | 3 dias (HML) / 14 (PRD) | armazenamento CloudWatch |
 | Sem LoadBalancer público na app | NodePort + VPC Link | ~US$ 16/mês, ver [ADR-012](ADR-012-gitops-eks-nodeport.md) |

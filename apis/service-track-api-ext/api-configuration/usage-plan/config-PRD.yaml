@@ -42,3 +42,6 @@ stage:
 waf:
   enabled: true
   rateLimit: 2000
+  sqlInjection:
+    enabled: true
+    mode: block
