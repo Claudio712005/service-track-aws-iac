@@ -29,12 +29,13 @@
 | [023](adr/ADR-023-dimensionamento-de-compute-por-ambiente.md) | Dimensionamento de compute por ambiente, e por que HML não tem HPA |
 | [024](adr/ADR-024-topologia-de-rede-e-tabelas-de-rota.md) | Topologia de rede, tabelas de rota e saída para a internet |
 | [025](adr/ADR-025-regras-de-security-group.md) | Regras de security group e a fronteira entre states *(regras 1 a 3 revogadas pelo 026)* |
-| [026](adr/ADR-026-plataforma-sem-acoplamento-a-servicos.md) | Plataforma sem acoplamento a serviços (Fase 4) |
+| [026](adr/ADR-026-plataforma-sem-acoplamento-a-servicos.md) | Plataforma sem acoplamento a serviços (Fase 4) *(VPC Link/NLB/NodePort voltam pelo 033)* |
 | [027](adr/ADR-027-autenticacao-e-borda-desligadas-por-flag.md) | Autenticação e borda desligadas por flag |
 | [028](adr/ADR-028-senha-do-argocd-por-secret-da-esteira.md) | Senha do admin do ArgoCD vem do secret da esteira |
 | [029](adr/ADR-029-conta-aws-derivada-de-quem-esta-logado.md) | Nenhum identificador de conta AWS escrito no código |
 | [030](adr/ADR-030-exposicao-do-argocd-escolhida-por-execucao.md) | Exposição do ArgoCD escolhida na execução da esteira |
 | [031](adr/ADR-031-tls-proprio-do-argocd.md) | O ArgoCD serve o próprio TLS *(revoga o `server.insecure` do 021)* |
+| [033](adr/ADR-033-api-interna-para-o-bff.md) | API Gateway privada entre o BFF e os microsserviços *(revoga a remoção de VPC Link/NLB/NodePort do 026)* |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura

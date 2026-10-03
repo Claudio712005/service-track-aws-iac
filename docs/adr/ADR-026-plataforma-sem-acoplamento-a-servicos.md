@@ -1,12 +1,16 @@
 # ADR-026 — Plataforma sem acoplamento a serviços
 
-- **Status:** aceito
+- **Status:** aceito, parcialmente revogado
 - **Data:** 2026-09-22
 - **Substitui, no todo ou em parte:** [ADR-003](ADR-003-integracao-backend-eks-vpc-link.md),
   [ADR-012](ADR-012-gitops-eks-nodeport.md), [ADR-015](ADR-015-cd-imagem-por-ambiente.md),
   [ADR-017](ADR-017-acesso-a-aplicacao-apenas-pelo-gateway.md),
   [ADR-022](ADR-022-bootstrap-scripts-operacionais.md) e as regras 1, 2 e 3 do
   [ADR-025](ADR-025-regras-de-security-group.md)
+- **Revogado em parte por:** [ADR-033](ADR-033-api-interna-para-o-bff.md) — VPC Link, NLB e
+  NodePort voltam, para que o BFF alcance os microsserviços por uma API Gateway privada. A
+  regra "nenhum bloco `module` por serviço" continua valendo; a lista de serviços passa a
+  existir como dado em `apis/service-track-api-int/`
 
 ## Contexto
 
@@ -55,6 +59,8 @@ Consequências no modo de operar:
 - **Proxy genérico (`ANY /{proxy+}`) até um ingress controller no cluster.** Manteria os
   microsserviços alcançáveis pela borda sem rota por serviço. Adiado: exige ingress controller,
   custa o NLB (~US$ 16/mês) e a forma de expor os serviços ainda não foi decidida.
+  **Resolvido pelo `ADR-033`**: o caminho escolhido foi `/<servico>/{proxy+}` numa API Gateway
+  privada, com VPC Link e NLB, sem ingress controller.
 - **Módulo Terraform `microservico` neste repositório, instanciado por serviço.** Rejeitado:
   cada serviço novo viraria um bloco `module` aqui.
 - **Manter o Datadog até existir o substituto.** Rejeitado: ele era dimensionado para o
@@ -66,7 +72,8 @@ Consequências no modo de operar:
 - Serviço novo entra no cluster, recebe credencial e tem infraestrutura AWS sem nenhum commit
   aqui.
 - **Os microsserviços não são alcançáveis pela borda** até a decisão sobre exposição. Só o
-  login é público.
+  login é público. *(Decidido no `ADR-033`: alcançáveis por uma API privada, só de dentro da
+  VPC. Nada deles passa a ser público.)*
 - **Não há observabilidade provisionada.** O requisito de rastreio distribuído da Fase 4 fica
   aberto até a entrada do Grafana.
 - Destruir o stack não apaga as imagens dos microsserviços, que vivem em ECR fora deste state.
