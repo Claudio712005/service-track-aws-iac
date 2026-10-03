@@ -1,0 +1,7 @@
+servicos:
+  - nome: catalogo
+    nodePort: 30080
+    saude: /actuator/health/readiness
+  - nome: usuarios-veiculos
+    nodePort: 30081
+    saude: /actuator/health/readiness
