@@ -34,5 +34,8 @@ stage:
   accessLogRetentionDays: 3
 
 waf:
-  enabled: false
+  enabled: true
   rateLimit: 2000
+  sqlInjection:
+    enabled: true
+    mode: block
