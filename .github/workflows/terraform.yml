@@ -39,6 +39,15 @@ on:
           - padrao
           - sim
           - nao
+      api_interna:
+        description: "Criar a API privada que expoe os microsservicos ao BFF (so vale na camada stack)"
+        required: false
+        type: choice
+        default: padrao
+        options:
+          - padrao
+          - sim
+          - nao
   workflow_call:
     inputs:
       action:
@@ -51,6 +60,10 @@ on:
         required: true
         type: string
       expor_argocd:
+        required: false
+        type: string
+        default: padrao
+      api_interna:
         required: false
         type: string
         default: padrao
@@ -316,37 +329,42 @@ jobs:
           CLUSTER_NAME: servicetrack-${{ inputs.env }}
         run: bash scripts/aws-lb-cleanup.sh
 
-      - name: Definir a exposicao do ArgoCD
-        id: argocd
+      - name: Definir as escolhas desta execucao
+        id: escolhas
         env:
-          ESCOLHA: ${{ inputs.expor_argocd }}
+          ESCOLHA_ARGOCD: ${{ inputs.expor_argocd }}
+          ESCOLHA_INTERNA: ${{ inputs.api_interna }}
         run: |
-          case "$ESCOLHA" in
-            sim) VAR="-var=argocd_expose_lb=true" ;;
-            nao) VAR="-var=argocd_expose_lb=false" ;;
-            padrao|"") VAR="" ;;
-            *)
-              echo "::error::expor_argocd aceita padrao, sim ou nao. Recebido: '$ESCOLHA'"
-              exit 1
-              ;;
-          esac
-          echo "var=$VAR" >> "$GITHUB_OUTPUT"
-          if [ -n "$VAR" ]; then
-            echo "exposicao do ArgoCD nesta execucao: $ESCOLHA"
-          else
-            echo "exposicao do ArgoCD: padrao do ambiente"
-          fi
+          VARS=""
+
+          traduzir() {
+            local nome="$1" variavel="$2" escolha="$3"
+            case "$escolha" in
+              sim) VARS="$VARS -var=$variavel=true"; echo "$nome nesta execucao: sim" ;;
+              nao) VARS="$VARS -var=$variavel=false"; echo "$nome nesta execucao: nao" ;;
+              padrao|"") echo "$nome: padrao do ambiente" ;;
+              *)
+                echo "::error::$nome aceita padrao, sim ou nao. Recebido: '$escolha'"
+                exit 1
+                ;;
+            esac
+          }
+
+          traduzir "exposicao do ArgoCD" argocd_expose_lb "$ESCOLHA_ARGOCD"
+          traduzir "API interna" habilitar_api_interna "$ESCOLHA_INTERNA"
+
+          echo "vars=${VARS# }" >> "$GITHUB_OUTPUT"
 
       - name: terraform plan
         id: plan
         if: inputs.action != 'apply'
         env:
           ACAO: ${{ inputs.action }}
-          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
+          VARS_EXECUCAO: ${{ steps.escolhas.outputs.vars }}
         run: |
           EXTRA=()
           if [ "$ACAO" = "destroy" ]; then EXTRA+=("-destroy"); fi
-          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
+          if [ -n "$VARS_EXECUCAO" ]; then read -r -a ESCOLHAS <<<"$VARS_EXECUCAO"; EXTRA+=("${ESCOLHAS[@]}"); fi
           terraform -chdir=${{ needs.prepare.outputs.workdir }} plan "${EXTRA[@]}" -no-color -lock-timeout=10m \
             -out=tfplan.bin | tee plan.txt
           exit "${PIPESTATUS[0]}"
@@ -362,11 +380,11 @@ jobs:
       - name: Apply fase 1 — ECR da Lambda
         if: inputs.action == 'apply' && steps.flags.outputs.auth == 'true'
         env:
-          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
+          VARS_EXECUCAO: ${{ steps.escolhas.outputs.vars }}
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           EXTRA=()
-          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
+          if [ -n "$VARS_EXECUCAO" ]; then read -r -a ESCOLHAS <<<"$VARS_EXECUCAO"; EXTRA+=("${ESCOLHAS[@]}"); fi
           terraform -chdir=$WD apply "${EXTRA[@]}" -no-color -auto-approve -lock-timeout=10m \
             -target=module.stack.module.ecr_lambda
 
@@ -380,12 +398,12 @@ jobs:
       - name: Apply fase 3 — stack completo
         if: inputs.action == 'apply'
         env:
-          VAR_ARGOCD: ${{ steps.argocd.outputs.var }}
+          VARS_EXECUCAO: ${{ steps.escolhas.outputs.vars }}
           ARGOCD_ADMIN_PASSWORD: ${{ secrets.ARGOCD_ADMIN_PASSWORD }}
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           EXTRA=()
-          if [ -n "$VAR_ARGOCD" ]; then EXTRA+=("$VAR_ARGOCD"); fi
+          if [ -n "$VARS_EXECUCAO" ]; then read -r -a ESCOLHAS <<<"$VARS_EXECUCAO"; EXTRA+=("${ESCOLHAS[@]}"); fi
           terraform -chdir=$WD apply "${EXTRA[@]}" -no-color -auto-approve -lock-timeout=10m
 
       - name: terraform destroy (aplica plano)
