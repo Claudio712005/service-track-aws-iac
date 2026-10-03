@@ -1,19 +1,23 @@
 # service-track-aws-iac
 
 Plataforma AWS compartilhada do ServiceTrack: rede, cluster EKS com ArgoCD e, quando
-habilitadas, a Lambda de autenticação e o API Gateway que a expõe.
+habilitadas, a Lambda de autenticação, o API Gateway que a expõe e a API Gateway privada pela
+qual o BFF alcança os microsserviços.
 
-> **Autenticação e borda estão desligadas** (`habilitar_autenticacao` e `habilitar_borda`,
-> ambas `false`). Um `apply` hoje entrega rede, EKS, ArgoCD e os microsserviços
-> descobertos — nada mais. Motivo: cada microsserviço terá o próprio banco e a modelagem de
+> **As três flags estão desligadas** (`habilitar_autenticacao`, `habilitar_borda` e
+> `habilitar_api_interna`, todas `false`). Um `apply` hoje entrega rede, EKS, ArgoCD e os
+> microsserviços descobertos — nada mais. Motivo: cada microsserviço terá o próprio banco e a modelagem de
 > dados da Fase 4 ainda não fechou; sem essa decisão, a Lambda de autenticação (que lê o RDS
 > do monólito) e o gateway (cuja única rota é o login) ficam fora. Ver `IAC-ADR-027`.
 
-**Este repositório não conhece nenhum microsserviço.** Não há nome de serviço, manifesto de
-aplicação, repositório de imagem de aplicação nem rota de negócio aqui. Cada microsserviço
-carrega no próprio repositório os manifestos (`k8s/`) e a infraestrutura AWS de que precisa
-(`infra/terraform/`), e entra no cluster sem nenhuma edição deste lado — ver
+**Este repositório cita microsserviço em um arquivo só.** Não há manifesto de aplicação,
+repositório de imagem de aplicação, rota de negócio nem bloco `module` por serviço aqui. Cada
+microsserviço carrega no próprio repositório os manifestos (`k8s/`) e a infraestrutura AWS de
+que precisa (`infra/terraform/`), e entra no cluster sem nenhuma edição deste lado — ver
 [kubernetes/README.md](kubernetes/README.md) e `IAC-ADR-026`.
+
+A exceção é `apis/service-track-api-int/servicos-<ENV>.yaml`: a lista de quem fica atrás da API
+privada, como dado, para que o módulo continue genérico (`IAC-ADR-033`).
 
 > **O banco de dados não vive aqui.** O RDS está em
 > [service-track-db-infra](https://github.com/Claudio712005/service-track-db-infra)
@@ -28,6 +32,8 @@ apis/
     api-configuration/
       cors/config-{HML,PRD}.yaml       CORS por ambiente
       usage-plan/config-{HML,PRD}.yaml Throttling, quota, consumidores, logs e WAF
+  service-track-api-int/           Lista dos servicos atras da API privada (IAC-ADR-033)
+    servicos-{HML,PRD}.yaml        nome, nodePort e caminho de health de cada servico
 
 iac/
   network/
@@ -40,6 +46,7 @@ iac/
     lambda/            Lambda de autenticacao (imagem de container) + SG + logs
     lambda-authorizer/ Authorizer de JWT na borda (Go) + testes, opcional
     api-gateway/       REST API a partir do openApi.yaml, usage plans, API keys, CORS, WAF
+    api-interna/       API Gateway PRIVATE + VPC Link + NLB interno, para o BFF chamar os servicos
     stack/             Composicao dos modulos acima
   environments/
     hml/ prd/          Root modules finos, state key servicetrack/<env>
@@ -90,22 +97,42 @@ docs/                  ADRs, RFCs, guia do gateway e diagramas
   Hoje expõe só `POST /autenticacao`, roteado para a Lambda. A URL base vai para
   `/servicetrack/<env>/api/base-url` no SSM.
 
+- **API interna** (`modules/api-interna`, só com `habilitar_api_interna = true`) — uma
+  **segunda** API Gateway, com endpoint `PRIVATE`, que roteia `/<servico>/{proxy+}` para os pods
+  por VPC Link e NLB interno. É o caminho do BFF até os microsserviços (`IAC-ADR-033`). A base
+  vai para `/servicetrack/<env>/api-interna/base-url` no SSM.
+
 ## Exposição da API
 
+Há **duas** APIs, e elas não se misturam:
+
 ```
-Internet -> API Gateway REST (stage hml|prd)
+Internet -> API Gateway REST publico (stage hml|prd)        habilitar_borda
               '-- POST /autenticacao -> Lambda de autenticacao
+
+BFF (no cluster) -> endpoint de interface na VPC             habilitar_api_interna
+                      '-- API Gateway PRIVATE (stage interna)
+                            '-- VPC Link -> NLB interno -> NodePort -> pod
 ```
 
-Na borda o gateway aplica API key por consumidor (`x-api-key`), throttling, quota, validação
-de request por JSON Schema e CORS. Rota fora do contrato responde `403`.
+Na borda pública o gateway aplica API key por consumidor (`x-api-key`), throttling, quota,
+validação de request por JSON Schema, CORS e WAF. Rota fora do contrato responde `403`.
 
-**Os microsserviços não são expostos pelo gateway, nem por nada.** Não há VPC Link, NLB nem
-NodePort. Um microsserviço é alcançado de dentro do cluster (outro pod, ou um BFF quando
-existir) ou por `kubectl port-forward`, que é você usando a própria credencial e não uma
+**Nenhum microsserviço é alcançável da internet.** A API interna tem endpoint `PRIVATE`, não
+resolve fora da VPC, e nega por política de recurso qualquer `sourceVpce` que não seja o nosso.
+O NLB é `internal`, e o NodePort só aceita tráfego do security group do NLB. **Não há WAF nela:**
+a AWS não associa WebACL a API Gateway privada — quem fica atrás do WAF é a borda pública.
+
+Fora desse caminho, um microsserviço é alcançado de dentro do cluster (outro pod, pelo DNS do
+Kubernetes) ou por `kubectl port-forward`, que é você usando a própria credencial e não uma
 porta aberta na internet.
 
-Com `habilitar_borda = false` — o padrão de hoje — nem o gateway existe.
+Com as duas flags em `false` — o padrão de hoje — nenhuma das duas APIs existe.
+
+Serviço novo na API interna: uma linha em `apis/service-track-api-int/servicos-<ENV>.yaml` e um
+`Service type=NodePort` na mesma porta no repositório do serviço. **As duas metades vivem em
+repositórios diferentes e nada valida o par** — porta divergente aparece como alvo `unhealthy`
+no target group, não como erro de apply.
 
 Antes de qualquer `apply` que altere o contrato:
 
@@ -204,7 +231,8 @@ A conta é AWS Academy: as credenciais mudam a cada laboratório e as esteiras f
 
 ```hcl
 habilitar_autenticacao = true   # Lambda + ECR dela + par RS256 + leitura do RDS
-habilitar_borda        = true   # API Gateway a partir do contrato EXT
+habilitar_borda        = true   # API Gateway publico a partir do contrato EXT
+habilitar_api_interna  = true   # API Gateway privada + VPC Link + NLB interno, para o BFF
 ```
 
 `habilitar_borda` exige `habilitar_autenticacao`: a única rota publicada é o login, e sem ela
@@ -266,6 +294,10 @@ Destruir HML quando não estiver em uso é o corte mais eficaz.
 | `lambda_function_name` | função de autenticação |
 | `rds_endpoint` | banco lido pela Lambda (vem do SSM do db-infra) |
 | `api_gateway_url` | URL base pública, já com o stage |
+| `api_interna_url` | base da API privada; resolve só de dentro da VPC |
+| `api_interna_bases` | base de cada microsserviço na API privada, para o BFF |
+| `api_interna_id` | ID do REST API privado |
+| `api_interna_vpc_endpoint_id` | endpoint de interface que a política de recurso autoriza |
 | `api_gateway_id` | ID do REST API |
 | `api_consumers` | consumidores habilitados |
 | `api_key_values` | consumidor → API key (sensível) |
@@ -291,7 +323,7 @@ kubectl -n argocd port-forward svc/argocd-server 8081:80
 | Script | Quando |
 |---|---|
 | `bootstrap-tfstate.sh` | antes de tudo, uma vez por conta AWS |
-| `aws-lb-cleanup.sh` | antes de todo `destroy` do stack — remove ELB/ENI órfãos que travam a VPC |
+| `aws-lb-cleanup.sh` | antes de todo `destroy` do stack — remove ELB/ENI órfãos que travam a VPC. Preserva o que tem `ManagedBy=terraform`: o NLB da API interna é destruído pelo `terraform destroy`, na ordem certa |
 | `argocd-bootstrap-apply.sh` | chamado pelo apply; reexecutável à mão para registrar um microsserviço novo sem Terraform |
 | `lambda-bootstrap-image.sh` | fase 2 do bootstrap da Lambda |
 | `validate-openapi.sh` | antes de qualquer apply que altere o contrato |
