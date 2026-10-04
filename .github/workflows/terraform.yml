@@ -400,6 +400,8 @@ jobs:
         env:
           VARS_EXECUCAO: ${{ steps.escolhas.outputs.vars }}
           ARGOCD_ADMIN_PASSWORD: ${{ secrets.ARGOCD_ADMIN_PASSWORD }}
+          OPS_TOKEN: ${{ secrets.OPS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           WD="${{ needs.prepare.outputs.workdir }}"
           EXTRA=()
