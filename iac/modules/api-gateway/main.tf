@@ -5,6 +5,10 @@ locals {
   waf         = try(local.plan["waf"], { enabled = false })
   waf_enabled = try(local.waf["enabled"], false)
 
+  waf_sqli          = try(local.waf["sqlInjection"], { enabled = true, mode = "block" })
+  waf_sqli_habilita = local.waf_enabled && try(local.waf_sqli["enabled"], true)
+  waf_sqli_bloqueia = try(local.waf_sqli["mode"], "block") == "block"
+
   cors_response_headers = merge(
     {
       "method.response.header.Access-Control-Allow-Origin"  = "'${local.cors.allowOrigin}'"
@@ -295,7 +299,7 @@ resource "aws_wafv2_web_acl" "this" {
   count = local.waf_enabled ? 1 : 0
 
   name        = "${var.name}-waf"
-  description = "Rate limiting por IP na borda do API Gateway em ${var.environment}"
+  description = "Borda do API Gateway em ${var.environment}: limite por IP e regra gerenciada de SQL injection"
   scope       = "REGIONAL"
 
   default_action {
@@ -321,6 +325,40 @@ resource "aws_wafv2_web_acl" "this" {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.name}-${var.environment}-rate-limit"
       sampled_requests_enabled   = true
+    }
+  }
+
+  dynamic "rule" {
+    for_each = local.waf_sqli_habilita ? [1] : []
+
+    content {
+      name     = "sql-injection"
+      priority = 2
+
+      override_action {
+        dynamic "none" {
+          for_each = local.waf_sqli_bloqueia ? [1] : []
+          content {}
+        }
+
+        dynamic "count" {
+          for_each = local.waf_sqli_bloqueia ? [] : [1]
+          content {}
+        }
+      }
+
+      statement {
+        managed_rule_group_statement {
+          vendor_name = "AWS"
+          name        = "AWSManagedRulesSQLiRuleSet"
+        }
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = "${var.name}-${var.environment}-sql-injection"
+        sampled_requests_enabled   = true
+      }
     }
   }
 
