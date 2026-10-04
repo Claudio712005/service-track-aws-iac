@@ -7,6 +7,12 @@ TAG_KEY="kubernetes.io/cluster/${CLUSTER_NAME}"
 
 log() { echo ">> $*"; }
 
+gerenciado_pelo_terraform() {
+  aws elbv2 describe-tags --region "$AWS_REGION" --resource-arns "$1" \
+    --query "TagDescriptions[0].Tags[?Key=='ManagedBy' && Value=='terraform'] | length(@)" \
+    --output text 2>/dev/null | grep -qx 1
+}
+
 if aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION" >/dev/null 2>&1 \
    && kubectl version >/dev/null 2>&1; then
   log "Cluster acessivel — apagando Services type=LoadBalancer via kubectl..."
@@ -36,6 +42,10 @@ if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
     --query "LoadBalancers[?VpcId=='${VPC_ID}'].LoadBalancerArn" --output text 2>/dev/null \
     | tr '\t' '\n' | while read -r arn; do
         [ -n "$arn" ] || continue
+        if gerenciado_pelo_terraform "$arn"; then
+          log "  mantem elbv2 $arn (ManagedBy=terraform: quem destroi e o terraform destroy)"
+          continue
+        fi
         log "  delete elbv2 $arn"
         aws elbv2 delete-load-balancer --region "$AWS_REGION" --load-balancer-arn "$arn" || true
       done
@@ -51,8 +61,11 @@ fi
 
 log "Aguardando ELBs desprovisionarem..."
 for i in $(seq 1 18); do
-  REST_V2="$(aws elbv2 describe-load-balancers --region "$AWS_REGION" \
-    --query "length(LoadBalancers[?VpcId=='${VPC_ID}'])" --output text 2>/dev/null || echo 0)"
+  REST_V2=0
+  for arn in $(aws elbv2 describe-load-balancers --region "$AWS_REGION" \
+    --query "LoadBalancers[?VpcId=='${VPC_ID}'].LoadBalancerArn" --output text 2>/dev/null | tr '\t' '\n'); do
+    gerenciado_pelo_terraform "$arn" || REST_V2=$((REST_V2 + 1))
+  done
   REST_V1="$(aws elb describe-load-balancers --region "$AWS_REGION" \
     --query "length(LoadBalancerDescriptions[?VPCId=='${VPC_ID}'])" --output text 2>/dev/null || echo 0)"
   [ "$REST_V2" = "0" ] && [ "$REST_V1" = "0" ] && { log "ELBs limpos."; break; }

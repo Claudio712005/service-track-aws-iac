@@ -66,3 +66,21 @@ output "api_key_ids" {
 output "jwt_authorizer_function_name" {
   value = one(module.jwt_authorizer[*].function_name)
 }
+
+output "api_interna_url" {
+  description = "Base da API interna. Resolve apenas de dentro da VPC. Nula sem habilitar_api_interna."
+  value       = one(module.api_interna[*].url_privada)
+}
+
+output "api_interna_bases" {
+  description = "Base de cada microsservico na API interna, para a configuracao do BFF."
+  value       = one(module.api_interna[*].bases_dos_servicos)
+}
+
+output "api_interna_id" {
+  value = one(module.api_interna[*].rest_api_id)
+}
+
+output "api_interna_vpc_endpoint_id" {
+  value = one(module.api_interna[*].vpc_endpoint_id)
+}

@@ -17,6 +17,12 @@ on:
         type: choice
         options: [padrao, sim, nao]
         default: padrao
+      api_interna:
+        description: "Criar a API privada que expoe os microsservicos ao BFF"
+        required: false
+        type: choice
+        options: [padrao, sim, nao]
+        default: padrao
 
 permissions:
   contents: read
@@ -44,6 +50,7 @@ jobs:
       env: ${{ inputs.env }}
       camada: stack
       expor_argocd: ${{ inputs.expor_argocd }}
+      api_interna: ${{ inputs.api_interna }}
     secrets: inherit
 
   resumo:
@@ -72,6 +79,10 @@ jobs:
           URL="$(aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/api/base-url" \
             --query Parameter.Value --output text 2>/dev/null || echo '')"
           echo "api_url=$URL" >> "$GITHUB_OUTPUT"
+
+          INTERNA="$(aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/api-interna/base-url" \
+            --query Parameter.Value --output text 2>/dev/null || echo '')"
+          echo "api_interna_url=$INTERNA" >> "$GITHUB_OUTPUT"
 
       - name: Consolidar
         env:
@@ -102,6 +113,24 @@ jobs:
                 echo "Os microsservicos so respondem dentro do cluster."
               fi
               echo ""
+              INTERNA="${{ steps.enderecos.outputs.api_interna_url }}"
+              if [ -n "$INTERNA" ]; then
+                echo "### API interna"
+                echo ""
+                echo "Base: $INTERNA"
+                echo ""
+                echo "Endpoint **privado**: resolve so de dentro da VPC, e e para o BFF chamar."
+                echo "De fora, e da sua maquina, nao responde — por desenho (IAC-ADR-033)."
+                echo "Rota por servico: \`$INTERNA/<servico>/<caminho>\`."
+                echo ""
+                echo "Para conferir de dentro do cluster:"
+                echo ""
+                echo '```bash'
+                echo "kubectl run curl-interna --rm -it --image=curlimages/curl --restart=Never -- \\"
+                echo "  curl -s -o /dev/null -w '%{http_code}\\n' $INTERNA/catalogo/actuator/health"
+                echo '```'
+                echo ""
+              fi
               echo "### Ver os microsservicos"
               echo ""
               echo '```bash'

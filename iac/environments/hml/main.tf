@@ -15,6 +15,7 @@ module "stack" {
 
   habilitar_autenticacao = var.habilitar_autenticacao
   habilitar_borda        = var.habilitar_borda
+  habilitar_api_interna  = var.habilitar_api_interna
 
   lambda_memory_size = 512
   lambda_timeout     = 30
