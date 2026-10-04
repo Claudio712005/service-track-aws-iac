@@ -86,6 +86,10 @@ docs/                  ADRs, RFCs, guia do gateway e diagramas
 - **Descoberta de microsserviços** — no fim de todo `apply`,
   `scripts/argocd-bootstrap-apply.sh` aplica o `AppProject` e gera uma `Application` para
   cada repositório do owner que tenha `k8s/argocd/<ambiente>.yaml` na `main`.
+  A listagem usa a API do GitHub **autenticada** por `OPS_TOKEN` (ou `GITHUB_TOKEN`): sem
+  token o limite é de 60 chamadas por hora **por IP**, e o IP de um runner do Actions é
+  compartilhado — estourava e derrubava o apply inteiro no fim. Sem token o script ainda
+  tenta, avisando.
 - **Lambda de autenticação** (`modules/lambda`, só com `habilitar_autenticacao = true`) —
   imagem de container nas subnets privadas,
   com a regra de entrada na porta 5432 do security group do banco. Assina o JWT com o par
@@ -324,7 +328,7 @@ kubectl -n argocd port-forward svc/argocd-server 8081:80
 |---|---|
 | `bootstrap-tfstate.sh` | antes de tudo, uma vez por conta AWS |
 | `aws-lb-cleanup.sh` | antes de todo `destroy` do stack — remove ELB/ENI órfãos que travam a VPC. Preserva o que tem `ManagedBy=terraform`: o NLB da API interna é destruído pelo `terraform destroy`, na ordem certa |
-| `argocd-bootstrap-apply.sh` | chamado pelo apply; reexecutável à mão para registrar um microsserviço novo sem Terraform |
+| `argocd-bootstrap-apply.sh` | chamado pelo apply; reexecutável à mão para registrar um microsserviço novo sem Terraform. Exporte `OPS_TOKEN` para não depender do limite anônimo da API do GitHub |
 | `lambda-bootstrap-image.sh` | fase 2 do bootstrap da Lambda |
 | `validate-openapi.sh` | antes de qualquer apply que altere o contrato |
 | `contract-test.sh` | após o apply, valida a API publicada |

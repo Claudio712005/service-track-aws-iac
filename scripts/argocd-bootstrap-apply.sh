@@ -17,8 +17,9 @@ done
 [ -f "$TEMPLATE" ] || { echo "Template de Application nao encontrado: $TEMPLATE" >&2; exit 1; }
 
 REPOS_FILE=""
+RESPOSTA_FILE=""
 KUBECONFIG_FILE="$(mktemp)"
-trap 'rm -f "$KUBECONFIG_FILE" "$REPOS_FILE"' EXIT
+trap 'rm -f "$KUBECONFIG_FILE" "$REPOS_FILE" "$RESPOSTA_FILE"' EXIT
 export KUBECONFIG="$KUBECONFIG_FILE"
 
 aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION" >/dev/null
@@ -69,12 +70,39 @@ kubectl apply -f "$ARGOCD_DIR/projects/service-track.appproject.yaml"
 echo ">> descobrindo microsservicos com k8s/argocd/${ENVIRONMENT}.yaml..."
 
 REPOS_FILE="$(mktemp)"
-curl -s "https://api.github.com/users/${OWNER}/repos?per_page=100" \
-  | python3 -c "
-import json, sys
-for r in json.load(sys.stdin):
-    print(r['name'])
-" > "$REPOS_FILE"
+RESPOSTA_FILE="$(mktemp)"
+
+TOKEN="${OPS_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
+CABECALHOS=(-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+if [ -n "$TOKEN" ]; then
+  CABECALHOS+=(-H "Authorization: Bearer $TOKEN")
+else
+  echo ">> AVISO: sem token do GitHub. A API limita a 60 chamadas por hora por IP," >&2
+  echo ">>        e o IP de um runner do Actions e compartilhado: o limite estoura facil." >&2
+fi
+
+curl -sS "${CABECALHOS[@]}" \
+  "https://api.github.com/users/${OWNER}/repos?per_page=100" > "$RESPOSTA_FILE"
+
+python3 - "$RESPOSTA_FILE" > "$REPOS_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as arquivo:
+    try:
+        dados = json.load(arquivo)
+    except json.JSONDecodeError as erro:
+        sys.exit(f"A API do GitHub nao respondeu JSON: {erro}")
+
+if isinstance(dados, dict):
+    sys.exit(
+        "A API do GitHub respondeu com erro em vez da lista de repositorios: "
+        + dados.get("message", str(dados))
+    )
+
+for repositorio in dados:
+    print(repositorio["name"])
+PY
 
 ENCONTRADOS=0
 while IFS= read -r REPO; do
