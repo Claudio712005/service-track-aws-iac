@@ -492,6 +492,8 @@ jobs:
             echo "| Autenticacao | ${{ steps.flags.outputs.auth }} |"
             echo "| Borda (API Gateway) | ${{ steps.flags.outputs.borda }} |"
             echo "| URL da API | ${{ steps.outputs.outputs.api_url || '-' }} |"
+            INTERNA="$(terraform -chdir=$WD output -raw api_interna_url 2>/dev/null || echo '')"
+            echo "| API interna (privada) | ${INTERNA:--} |"
             echo "| Contract test | ${{ steps.contract.outcome || 'ignorado' }} |"
             echo "| ECR Lambda | $(terraform -chdir=$WD output -raw lambda_ecr_repository_url 2>/dev/null || echo '-') |"
             echo "| Lambda de autenticacao | $(terraform -chdir=$WD output -raw lambda_function_name 2>/dev/null || echo '-') |"
