@@ -5,3 +5,6 @@ servicos:
   - nome: usuarios-veiculos
     nodePort: 30081
     saude: /actuator/health/readiness
+  - nome: ordens
+    nodePort: 30082
+    saude: /actuator/health/readiness
