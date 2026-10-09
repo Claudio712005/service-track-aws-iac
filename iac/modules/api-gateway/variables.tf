@@ -74,3 +74,20 @@ variable "authorizer_result_ttl_seconds" {
   type        = number
   default     = 300
 }
+
+variable "bff_integration_uri" {
+  description = "Base HTTP do BFF atras do NLB interno, sem barra final. Nulo nao cria a rota publica do BFF."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.bff_integration_uri == null || can(regex("^http://[^/]+:[0-9]+$", var.bff_integration_uri))
+    error_message = "bff_integration_uri precisa ser http://<host>:<porta>, sem caminho e sem barra final."
+  }
+}
+
+variable "vpc_link_id" {
+  description = "VPC Link que liga o gateway ao NLB interno. Nulo nao cria a rota publica do BFF."
+  type        = string
+  default     = null
+}

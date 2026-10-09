@@ -56,7 +56,7 @@ paths:
         uri: ${auth_lambda_uri}
         passthroughBehavior: when_no_match
     options: ${cors_options}
-
+${bff_paths}
 components:
 
   securitySchemes:
