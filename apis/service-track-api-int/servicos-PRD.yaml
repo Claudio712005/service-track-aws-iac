@@ -8,3 +8,8 @@ servicos:
   - nome: ordens
     nodePort: 30082
     saude: /actuator/health/readiness
+
+bff:
+  nome: bff
+  nodePort: 30083
+  saude: /actuator/health/readiness

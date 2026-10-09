@@ -72,3 +72,28 @@ variable "stage_name" {
   type    = string
   default = "interna"
 }
+
+variable "bff" {
+  description = "Servico que fica atras do NLB sem entrar na API interna, porque quem o chama e o gateway publico. Nulo nao cria alvo nenhum."
+  type = object({
+    nome      = string
+    node_port = number
+    saude     = string
+  })
+  default = null
+
+  validation {
+    condition     = var.bff == null || can(regex("^[a-z][a-z0-9-]{0,24}$", var.bff.nome))
+    error_message = "nome do bff precisa ser minusculo, comecar com letra e ter no maximo 25 caracteres: ele entra no nome do target group, que tem teto de 32."
+  }
+
+  validation {
+    condition     = var.bff == null || (var.bff.node_port >= 30000 && var.bff.node_port <= 32767)
+    error_message = "node_port do bff fora da faixa que o Kubernetes aloca para NodePort, de 30000 a 32767."
+  }
+
+  validation {
+    condition     = var.bff == null || !contains([for s in var.servicos : s.node_port], var.bff.node_port)
+    error_message = "node_port do bff colide com o de um servico da API interna; o NLB escuta uma porta por alvo."
+  }
+}
