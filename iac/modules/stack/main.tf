@@ -18,13 +18,23 @@ locals {
   api_int_dir = "${path.module}/../../../apis/service-track-api-int"
   env_suffix  = upper(var.environment)
 
+  catalogo_de_servicos = yamldecode(file("${local.api_int_dir}/servicos-${local.env_suffix}.yaml"))
+
   servicos_internos = [
-    for s in yamldecode(file("${local.api_int_dir}/servicos-${local.env_suffix}.yaml")).servicos : {
+    for s in local.catalogo_de_servicos.servicos : {
       nome      = s.nome
       node_port = s.nodePort
       saude     = s.saude
     }
   ]
+
+  # O BFF fica no mesmo arquivo porque e a unica lista deste repositorio que cita
+  # microsservico (IAC-ADR-033), mas em chave separada: ele nao e exposto pela API interna.
+  bff_interno = try({
+    nome      = local.catalogo_de_servicos.bff.nome
+    node_port = local.catalogo_de_servicos.bff.nodePort
+    saude     = local.catalogo_de_servicos.bff.saude
+  }, null)
 
   jwt_private_key_pem = one(tls_private_key.jwt[*].private_key_pem_pkcs8)
   jwt_public_key_pem  = one(tls_private_key.jwt[*].public_key_pem)
@@ -244,6 +254,10 @@ module "api_gateway" {
 
   enable_access_logs  = var.enable_api_access_logs
   cloudwatch_role_arn = data.aws_iam_role.lab.arn
+
+  # Sem API interna nao existe NLB nem VPC Link, entao a rota publica do BFF nao e criada.
+  bff_integration_uri = local.api_interna == 1 ? module.api_interna[0].bff_integration_uri : null
+  vpc_link_id         = local.api_interna == 1 ? module.api_interna[0].vpc_link_id : null
 }
 
 module "api_interna" {
@@ -263,6 +277,7 @@ module "api_interna" {
   node_asg_count         = var.node_asg_count
 
   servicos = local.servicos_internos
+  bff      = local.bff_interno
 }
 
 resource "aws_ssm_parameter" "api_interna_base_url" {

@@ -5,8 +5,13 @@ locals {
 
   servicos = { for s in var.servicos : s.nome => s }
 
+  # O BFF entra no NLB, nao na API interna: a API interna e por onde o BFF chama os outros,
+  # e quem chama o BFF e o gateway publico. Ter um alvo no mesmo NLB evita um segundo
+  # balanceador e um segundo VPC Link para um unico servico.
+  atras_do_nlb = var.bff == null ? local.servicos : merge(local.servicos, { (var.bff.nome) = var.bff })
+
   anexos = flatten([
-    for s in var.servicos : [
+    for s in values(local.atras_do_nlb) : [
       for i in range(var.node_asg_count) : {
         servico = s.nome
         indice  = i
@@ -118,7 +123,7 @@ resource "aws_security_group" "nlb" {
 }
 
 resource "aws_security_group_rule" "nodes_recebem_do_nlb" {
-  for_each = local.servicos
+  for_each = local.atras_do_nlb
 
   description              = "NodePort de ${each.key} aceita trafego apenas do NLB interno"
   type                     = "ingress"
@@ -144,7 +149,7 @@ resource "aws_lb" "this" {
 }
 
 resource "aws_lb_target_group" "servico" {
-  for_each = local.servicos
+  for_each = local.atras_do_nlb
 
   name        = "${local.abreviacao}-${each.key}"
   port        = each.value.node_port
@@ -167,7 +172,7 @@ resource "aws_lb_target_group" "servico" {
 }
 
 resource "aws_lb_listener" "servico" {
-  for_each = local.servicos
+  for_each = local.atras_do_nlb
 
   load_balancer_arn = aws_lb.this.arn
   port              = each.value.node_port

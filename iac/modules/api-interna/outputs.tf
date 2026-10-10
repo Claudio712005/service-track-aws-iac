@@ -31,3 +31,8 @@ output "bases_dos_servicos" {
     nome => "https://${aws_api_gateway_rest_api.this.id}.execute-api.${var.region}.amazonaws.com/${aws_api_gateway_stage.this.stage_name}/${nome}"
   }
 }
+
+output "bff_integration_uri" {
+  description = "URI de integracao do BFF para o gateway publico. Nulo quando o BFF nao esta atras do NLB."
+  value       = var.bff == null ? null : "http://${aws_lb.this.dns_name}:${var.bff.node_port}"
+}

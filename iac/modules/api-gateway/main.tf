@@ -54,6 +54,58 @@ locals {
     }
   })
 
+  # O BFF e o unico destino de cluster do gateway publico. Sem URI de integracao as rotas nao
+  # sao renderizadas: publicar path apontando para um NLB que pode nao existir falha em tempo de
+  # apply, no meio da subida do ambiente, e o erro aparece longe da causa.
+  bff_habilitado = var.bff_integration_uri != null && var.vpc_link_id != null
+
+  bff_integracao_raiz = {
+    type                = "HTTP_PROXY"
+    httpMethod          = "ANY"
+    uri                 = "${var.bff_integration_uri}/"
+    connectionType      = "VPC_LINK"
+    connectionId        = var.vpc_link_id
+    passthroughBehavior = "when_no_match"
+    timeoutInMillis     = 29000
+  }
+
+  bff_integracao_proxy = {
+    type                = "HTTP_PROXY"
+    httpMethod          = "ANY"
+    uri                 = "${var.bff_integration_uri}/{proxy}"
+    connectionType      = "VPC_LINK"
+    connectionId        = var.vpc_link_id
+    passthroughBehavior = "when_no_match"
+    timeoutInMillis     = 29000
+    requestParameters = {
+      "integration.request.path.proxy" = "method.request.path.proxy"
+    }
+  }
+
+  # JSON e YAML valido, entao cada rota entra como uma linha indentada sob `paths`.
+  bff_paths = local.bff_habilitado ? join("\n", [
+    "  /bff: ${jsonencode({
+      "x-amazon-apigateway-any-method" = {
+        security                          = [{ ApiKeyAuth = [] }]
+        responses                         = {}
+        "x-amazon-apigateway-integration" = local.bff_integracao_raiz
+      }
+    })}",
+    "  /bff/{proxy+}: ${jsonencode({
+      "x-amazon-apigateway-any-method" = {
+        security = [{ ApiKeyAuth = [] }]
+        parameters = [{
+          name     = "proxy"
+          in       = "path"
+          required = true
+          schema   = { type = "string" }
+        }]
+        responses                         = {}
+        "x-amazon-apigateway-integration" = local.bff_integracao_proxy
+      }
+    })}",
+  ]) : ""
+
   bearer_auth_scheme = var.authorizer_invoke_arn == null ? jsonencode({
     type         = "http"
     scheme       = "bearer"
@@ -75,6 +127,7 @@ locals {
     auth_lambda_uri    = var.auth_lambda_invoke_arn
     cors_options       = local.cors_options
     bearer_auth_scheme = local.bearer_auth_scheme
+    bff_paths          = local.bff_paths
   })
 
   stage_cfg = local.plan["stage"]
