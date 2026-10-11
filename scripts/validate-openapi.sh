@@ -71,21 +71,53 @@ bearer_auth_scheme = {
     },
 }
 
+bff_integracao = {
+    "x-amazon-apigateway-integration": {
+        "type": "http_proxy",
+        "httpMethod": "ANY",
+        "uri": "http://fake-nlb.elb.us-east-1.amazonaws.com:30083",
+        "connectionType": "VPC_LINK",
+        "connectionId": "fakevpc",
+        "passthroughBehavior": "when_no_match",
+    },
+    "responses": {"200": {"description": "resposta do BFF"}},
+}
+
+bff_paths = "\n".join([
+    "  /bff: %s" % json.dumps({"x-amazon-apigateway-any-method": bff_integracao}),
+    "  /bff/{proxy+}: %s" % json.dumps({"x-amazon-apigateway-any-method": bff_integracao}),
+])
+
 fake = {
     "auth_lambda_uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:000000000000:function:fake/invocations",
     "cors_options": json.dumps(cors_options),
     "bearer_auth_scheme": json.dumps(bearer_auth_scheme),
+    "bff_paths": bff_paths,
 }
 
 missing = set(re.findall(r"\$\{(\w+)\}", raw)) - set(fake)
 if missing:
     sys.exit("placeholders sem valor de teste: %s" % ", ".join(sorted(missing)))
 
-for key, value in fake.items():
-    raw = raw.replace("${%s}" % key, value)
+def render(com_bff):
+    saida = raw
+    for key, value in fake.items():
+        saida = saida.replace("${%s}" % key, value if com_bff or key != "bff_paths" else "")
+    return saida
 
-spec = yaml.safe_load(raw)
-validate(spec)
+spec = None
+for com_bff in (True, False):
+    atual = yaml.safe_load(render(com_bff))
+    validate(atual)
+    rotas = sorted(atual["paths"])
+    esperado_bff = {"/bff", "/bff/{proxy+}"}
+    presentes = esperado_bff & set(rotas)
+    if com_bff and presentes != esperado_bff:
+        sys.exit("com NLB as rotas do BFF deveriam existir, e as rotas sao %s" % rotas)
+    if not com_bff and presentes:
+        sys.exit("sem NLB o contrato nao pode publicar rota do BFF, e publicou %s" % sorted(presentes))
+    if com_bff:
+        spec = atual
 
 ops = sum(
     1
