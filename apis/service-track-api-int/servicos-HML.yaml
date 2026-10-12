@@ -1,5 +1,3 @@
-# Unico servico alcancavel por gateway (IAC-ADR-035). Os outros microsservicos
-# falam entre si pelo DNS do cluster e nao tem rota em gateway nenhum.
 bff:
   nome: bff
   nodePort: 30083
