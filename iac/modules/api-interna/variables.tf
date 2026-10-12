@@ -39,61 +39,26 @@ variable "node_asg_count" {
   default     = 1
 }
 
-variable "servicos" {
-  description = "Servicos alcancaveis pela API interna. O caminho da rota e o nome: /<nome>/{proxy+}."
-  type = list(object({
-    nome      = string
-    node_port = number
-    saude     = string
-  }))
-
-  validation {
-    condition     = length(var.servicos) > 0
-    error_message = "A API interna precisa de pelo menos um servico; sem servico ela nao tem rota."
-  }
-
-  validation {
-    condition     = length(distinct([for s in var.servicos : s.node_port])) == length(var.servicos)
-    error_message = "Dois servicos com o mesmo node_port: cada um precisa do seu, porque o NLB escuta na mesma porta do NodePort."
-  }
-
-  validation {
-    condition     = alltrue([for s in var.servicos : s.node_port >= 30000 && s.node_port <= 32767])
-    error_message = "node_port fora da faixa que o Kubernetes aloca para NodePort, de 30000 a 32767."
-  }
-
-  validation {
-    condition     = alltrue([for s in var.servicos : can(regex("^[a-z][a-z0-9-]{0,24}$", s.nome))])
-    error_message = "nome do servico precisa ser minusculo, comecar com letra e ter no maximo 25 caracteres: ele entra no nome do target group, que tem teto de 32."
-  }
-}
-
-variable "stage_name" {
-  type    = string
-  default = "interna"
-}
-
 variable "bff" {
-  description = "Servico que fica atras do NLB sem entrar na API interna, porque quem o chama e o gateway publico. Nulo nao cria alvo nenhum."
+  description = "Unico servico atras do NLB. Nenhum outro microsservico e alcancavel por gateway (IAC-ADR-035)."
   type = object({
     nome      = string
     node_port = number
     saude     = string
   })
-  default = null
 
   validation {
-    condition     = var.bff == null || can(regex("^[a-z][a-z0-9-]{0,24}$", var.bff.nome))
+    condition     = can(regex("^[a-z][a-z0-9-]{0,24}$", var.bff.nome))
     error_message = "nome do bff precisa ser minusculo, comecar com letra e ter no maximo 25 caracteres: ele entra no nome do target group, que tem teto de 32."
   }
 
   validation {
-    condition     = var.bff == null || (var.bff.node_port >= 30000 && var.bff.node_port <= 32767)
+    condition     = var.bff.node_port >= 30000 && var.bff.node_port <= 32767
     error_message = "node_port do bff fora da faixa que o Kubernetes aloca para NodePort, de 30000 a 32767."
   }
 
   validation {
-    condition     = var.bff == null || !contains([for s in var.servicos : s.node_port], var.bff.node_port)
-    error_message = "node_port do bff colide com o de um servico da API interna; o NLB escuta uma porta por alvo."
+    condition     = can(regex("^/", var.bff.saude))
+    error_message = "saude precisa ser um caminho absoluto, porque entra no health check HTTP do target group."
   }
 }
