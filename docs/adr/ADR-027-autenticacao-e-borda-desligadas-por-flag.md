@@ -1,6 +1,6 @@
 # ADR-027 — Autenticação e borda desligadas por flag
 
-- **Status:** aceito
+- **Status:** **superado pelo [ADR-036](ADR-036-autenticacao-ligada-por-padrao.md)** em 12/10/2026 — as flags passaram a `true` por padrão, e o motivo que as desligava (a Lambda lia o RDS do monólito) deixou de existir quando ela passou a chamar `POST /credenciais/verificacao`
 - **Data:** 2026-09-22
 - **Relacionada:** [ADR-026](ADR-026-plataforma-sem-acoplamento-a-servicos.md)
 
