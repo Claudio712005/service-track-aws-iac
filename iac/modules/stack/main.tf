@@ -20,21 +20,11 @@ locals {
 
   catalogo_de_servicos = yamldecode(file("${local.api_int_dir}/servicos-${local.env_suffix}.yaml"))
 
-  servicos_internos = [
-    for s in local.catalogo_de_servicos.servicos : {
-      nome      = s.nome
-      node_port = s.nodePort
-      saude     = s.saude
-    }
-  ]
-
-  # O BFF fica no mesmo arquivo porque e a unica lista deste repositorio que cita
-  # microsservico (IAC-ADR-033), mas em chave separada: ele nao e exposto pela API interna.
-  bff_interno = try({
+  bff_interno = {
     nome      = local.catalogo_de_servicos.bff.nome
     node_port = local.catalogo_de_servicos.bff.nodePort
     saude     = local.catalogo_de_servicos.bff.saude
-  }, null)
+  }
 
   jwt_private_key_pem = one(tls_private_key.jwt[*].private_key_pem_pkcs8)
   jwt_public_key_pem  = one(tls_private_key.jwt[*].public_key_pem)
@@ -276,17 +266,7 @@ module "api_interna" {
   node_asg_names         = module.eks.node_group_asg_names
   node_asg_count         = var.node_asg_count
 
-  servicos = local.servicos_internos
-  bff      = local.bff_interno
-}
-
-resource "aws_ssm_parameter" "api_interna_base_url" {
-  count = local.api_interna
-
-  name  = "/${var.project}/${var.environment}/api-interna/base-url"
-  type  = "String"
-  value = module.api_interna[0].url_privada
-  tags  = local.tags
+  bff = local.bff_interno
 }
 
 resource "aws_ssm_parameter" "api_base_url" {

@@ -1,14 +1,5 @@
-servicos:
-  - nome: catalogo
-    nodePort: 30080
-    saude: /actuator/health/readiness
-  - nome: usuarios-veiculos
-    nodePort: 30081
-    saude: /actuator/health/readiness
-  - nome: ordens
-    nodePort: 30082
-    saude: /actuator/health/readiness
-
+# Unico servico alcancavel por gateway (IAC-ADR-035). Os outros microsservicos
+# falam entre si pelo DNS do cluster e nao tem rota em gateway nenhum.
 bff:
   nome: bff
   nodePort: 30083
