@@ -3,16 +3,31 @@ locals {
 
   abreviacao = "st-${var.environment}"
 
-  anexos = range(var.node_asg_count)
+  # O BFF e alcancado pela borda publica, por VPC Link. O servico de verificacao de credencial
+  # e alcancado pela Lambda, que roda na VPC e nao resolve ClusterIP: listener no NLB e nenhuma
+  # rota em gateway (IAC-ADR-035).
+  alvos = merge(
+    { (var.bff.nome) = var.bff },
+    var.verificacao_de_credencial == null ? {} : { (var.verificacao_de_credencial.nome) = var.verificacao_de_credencial },
+  )
+
+  anexos = flatten([
+    for nome in keys(local.alvos) : [
+      for i in range(var.node_asg_count) : {
+        alvo   = nome
+        indice = i
+      }
+    ]
+  ])
 }
 
 resource "aws_security_group" "nlb" {
   name        = "${local.prefixo}-entrada-do-bff-nlb"
-  description = "Entrada do NLB interno que a borda publica usa para alcancar o BFF"
+  description = "Entrada do NLB interno: borda publica -> BFF, e Lambda -> verificacao de credencial"
   vpc_id      = var.vpc_id
 
   egress {
-    description = "Alcanca os nodes do EKS na porta de NodePort do BFF"
+    description = "Alcanca os nodes do EKS nas portas de NodePort dos alvos"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -23,11 +38,13 @@ resource "aws_security_group" "nlb" {
 }
 
 resource "aws_security_group_rule" "nodes_recebem_do_nlb" {
-  description              = "NodePort do BFF aceita trafego apenas do NLB interno"
+  for_each = local.alvos
+
+  description              = "NodePort de ${each.key} aceita trafego apenas do NLB interno"
   type                     = "ingress"
   security_group_id        = var.node_security_group_id
-  from_port                = var.bff.node_port
-  to_port                  = var.bff.node_port
+  from_port                = each.value.node_port
+  to_port                  = each.value.node_port
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.nlb.id
 }
@@ -46,9 +63,11 @@ resource "aws_lb" "this" {
   tags = merge(var.tags, { Name = "${local.prefixo}-entrada-do-bff" })
 }
 
-resource "aws_lb_target_group" "bff" {
-  name        = "${local.abreviacao}-${var.bff.nome}"
-  port        = var.bff.node_port
+resource "aws_lb_target_group" "alvo" {
+  for_each = local.alvos
+
+  name        = "${local.abreviacao}-${each.key}"
+  port        = each.value.node_port
   protocol    = "TCP"
   target_type = "instance"
   vpc_id      = var.vpc_id
@@ -57,32 +76,34 @@ resource "aws_lb_target_group" "bff" {
 
   health_check {
     protocol            = "HTTP"
-    path                = var.bff.saude
+    path                = each.value.saude
     port                = "traffic-port"
     healthy_threshold   = 2
     unhealthy_threshold = 2
     interval            = 10
   }
 
-  tags = merge(var.tags, { Name = "${local.prefixo}-${var.bff.nome}" })
+  tags = merge(var.tags, { Name = "${local.prefixo}-${each.key}" })
 }
 
-resource "aws_lb_listener" "bff" {
+resource "aws_lb_listener" "alvo" {
+  for_each = local.alvos
+
   load_balancer_arn = aws_lb.this.arn
-  port              = var.bff.node_port
+  port              = each.value.node_port
   protocol          = "TCP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.bff.arn
+    target_group_arn = aws_lb_target_group.alvo[each.key].arn
   }
 }
 
 resource "aws_autoscaling_attachment" "nodes" {
   count = length(local.anexos)
 
-  autoscaling_group_name = var.node_asg_names[local.anexos[count.index]]
-  lb_target_group_arn    = aws_lb_target_group.bff.arn
+  autoscaling_group_name = var.node_asg_names[local.anexos[count.index].indice]
+  lb_target_group_arn    = aws_lb_target_group.alvo[local.anexos[count.index].alvo].arn
 }
 
 resource "aws_api_gateway_vpc_link" "this" {

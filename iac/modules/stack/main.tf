@@ -26,6 +26,17 @@ locals {
     saude     = local.catalogo_de_servicos.bff.saude
   }
 
+  # So existe quando a autenticacao esta ligada: sem Lambda, ninguem chama a verificacao.
+  verificacao_de_credencial = var.habilitar_autenticacao ? {
+    nome      = local.catalogo_de_servicos.verificacaoDeCredencial.nome
+    node_port = local.catalogo_de_servicos.verificacaoDeCredencial.nodePort
+    saude     = local.catalogo_de_servicos.verificacaoDeCredencial.saude
+  } : null
+
+  # Vem do NLB, nao de gateway. Nula sem a entrada do BFF: sem NLB a Lambda nao tem como
+  # alcancar a verificacao de credencial, porque ela roda na VPC e nao resolve ClusterIP.
+  url_da_verificacao = one(module.entrada_do_bff[*].verificacao_de_credencial_url)
+
   jwt_private_key_pem = one(tls_private_key.jwt[*].private_key_pem_pkcs8)
   jwt_public_key_pem  = one(tls_private_key.jwt[*].public_key_pem)
 
@@ -36,6 +47,7 @@ locals {
       MP_JWT_VERIFY_PUBLICKEY = local.jwt_public_key_pem
       SMALLRYE_JWT_SIGN_KEY   = local.jwt_private_key_pem
     },
+    local.url_da_verificacao == null ? {} : { ST_USU_BASE_URL = local.url_da_verificacao },
     var.lambda_extra_env,
   )
 
@@ -266,7 +278,8 @@ module "entrada_do_bff" {
   node_asg_names         = module.eks.node_group_asg_names
   node_asg_count         = var.node_asg_count
 
-  bff = local.bff_interno
+  bff                       = local.bff_interno
+  verificacao_de_credencial = local.verificacao_de_credencial
 }
 
 resource "aws_ssm_parameter" "api_base_url" {

@@ -48,6 +48,35 @@ O que sai:
 O que fica, porque a rota pública `/bff` depende: **NLB interno, target group do BFF, listener,
 regra de ingress do NodePort 30083 e VPC Link.**
 
+### A Lambda é a exceção, e ela não passa por gateway
+
+A Lambda de autenticação chama `POST /credenciais/verificacao` no `usuarios-veiculos` para
+conferir a credencial antes de emitir o token. Ela **roda na VPC, não no cluster**, então não
+resolve DNS de `ClusterIP` — o caminho por DNS que o BFF usa não serve para ela.
+
+A `ADR-034` já registrava isso como pendência: o valor de `ST_USU_BASE_URL` "depende do caminho
+escolhido (NLB direto ou API interna)". Removendo a API interna, **sobra o NLB direto**, e é essa
+a decisão:
+
+| Quem | Alcança | Por onde |
+|---|---|---|
+| Borda pública | BFF (30083) | VPC Link → NLB |
+| Lambda de autenticação | `usuarios-veiculos` (30081) | **NLB direto**, sem gateway |
+| BFF | catálogo, usuários, ordens, checkout | DNS do cluster |
+
+**Isso não viola a decisão deste ADR**: o `usuarios-veiculos` ganha um listener no NLB e
+**nenhuma rota em gateway**. NLB é balanceador, não gateway, e a porta só aceita tráfego do
+security group dele.
+
+O alvo só existe com `habilitar_autenticacao = true` — sem Lambda ninguém chama a verificação. E
+`ST_USU_BASE_URL` passa a ser **injetada pelo stack** a partir do DNS do NLB, em vez de depender
+de alguém preencher `lambda_extra_env` à mão. **Essa variável nunca esteve ligada**: o Terraform
+não a definia em lugar nenhum, e a Lambda caía no default `http://localhost:8080`. Autenticação
+nunca funcionou em `hml` por esse motivo, independente deste ADR.
+
+**Consequência de flag:** `habilitar_autenticacao = true` passa a exigir
+`habilitar_entrada_do_bff = true`, porque sem NLB não há caminho até a verificação.
+
 ### A flag foi renomeada porque passou a mentir
 
 `habilitar_api_interna` → **`habilitar_entrada_do_bff`**. Ela não cria mais API nenhuma: cria o
@@ -77,11 +106,11 @@ valendo, e o arquivo encurtou.
   `/bff` mais `/bff/{proxy+}`, pelo VPC Link. É o que a `ADR-034` descreve, e agora não há um
   segundo gateway ao lado.
 - **O par porta/NodePort deixa de ser contrato entre repositórios** para catálogo (30080),
-  usuarios-veiculos (30081), ordens (30082) e checkout (30084): este repositório não cita mais
-  essas portas. Sobra só o par do BFF, em 30083.
-- **Os componentes `nodeport` desses quatro serviços ficaram sem consumidor.** Um NodePort sem
-  quem o chame é porta aberta no nó sem função. Removê-los é trabalho nos quatro repositórios e
-  **não entra aqui** — fica registrado como dívida.
+  ordens (30082) e checkout (30084): este repositório não cita mais essas portas. Sobram dois
+  pares: BFF em 30083 e `usuarios-veiculos` em 30081, este último só para a Lambda.
+- **Os componentes `nodeport` de catálogo, ordens e checkout ficaram sem consumidor.** Um
+  NodePort sem quem o chame é porta aberta no nó sem função. O do `usuarios-veiculos` **fica**,
+  porque a Lambda depende dele.
 - **Um recurso cobrado a menos**: o endpoint de interface do `execute-api` tinha custo por hora
   por AZ.
 - **O BFF perde o caminho por gateway que nunca usou.** Se algum dia a chamada precisar sair do

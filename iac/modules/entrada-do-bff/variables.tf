@@ -62,3 +62,28 @@ variable "bff" {
     error_message = "saude precisa ser um caminho absoluto, porque entra no health check HTTP do target group."
   }
 }
+
+variable "verificacao_de_credencial" {
+  description = "Servico que a Lambda de autenticacao chama para conferir credencial. Ganha listener no NLB e nenhuma rota em gateway: a Lambda roda na VPC e nao alcanca ClusterIP. Nulo quando a autenticacao esta desligada."
+  type = object({
+    nome      = string
+    node_port = number
+    saude     = string
+  })
+  default = null
+
+  validation {
+    condition     = var.verificacao_de_credencial == null || can(regex("^[a-z][a-z0-9-]{0,24}$", var.verificacao_de_credencial.nome))
+    error_message = "nome precisa ser minusculo, comecar com letra e ter no maximo 25 caracteres: ele entra no nome do target group, que tem teto de 32."
+  }
+
+  validation {
+    condition     = var.verificacao_de_credencial == null || (var.verificacao_de_credencial.node_port >= 30000 && var.verificacao_de_credencial.node_port <= 32767)
+    error_message = "node_port fora da faixa que o Kubernetes aloca para NodePort, de 30000 a 32767."
+  }
+
+  validation {
+    condition     = var.verificacao_de_credencial == null || var.verificacao_de_credencial.node_port != var.bff.node_port
+    error_message = "node_port colide com o do BFF; o NLB escuta uma porta por alvo."
+  }
+}

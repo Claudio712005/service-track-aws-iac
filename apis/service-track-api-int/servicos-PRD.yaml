@@ -1,6 +1,12 @@
-# Unico servico alcancavel por gateway (IAC-ADR-035). Os outros microsservicos
-# falam entre si pelo DNS do cluster e nao tem rota em gateway nenhum.
+# Quem fica atras do NLB interno (IAC-ADR-035). Nenhum destes tem rota em gateway:
+# o BFF e alcancado pela borda publica por VPC Link, e a verificacao de credencial
+# e alcancada pela Lambda, que roda na VPC e nao resolve DNS de ClusterIP.
 bff:
   nome: bff
   nodePort: 30083
+  saude: /actuator/health/readiness
+
+verificacaoDeCredencial:
+  nome: usuarios-veiculos
+  nodePort: 30081
   saude: /actuator/health/readiness
