@@ -14,9 +14,14 @@ variable "tags" {
 }
 
 variable "habilitar_autenticacao" {
-  description = "Cria a Lambda de autenticacao, o ECR dela, o par RS256 e a regra 5432 no SG do banco. Exige o banco do service-track-db-infra aplicado."
+  description = "Cria a Lambda de autenticacao, o ECR dela e o par RS256. Exige habilitar_entrada_do_bff: a Lambda alcanca a verificacao de credencial pelo NLB. Nao depende do service-track-db-infra — a Lambda nao tem banco (IAC-ADR-036)."
   type        = bool
   default     = false
+
+  validation {
+    condition     = !var.habilitar_autenticacao || var.habilitar_entrada_do_bff
+    error_message = "habilitar_autenticacao exige habilitar_entrada_do_bff: a Lambda roda na VPC e alcanca a verificacao de credencial pelo NLB interno, nao por DNS do cluster (IAC-ADR-035)."
+  }
 }
 
 variable "habilitar_borda" {

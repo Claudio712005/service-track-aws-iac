@@ -26,6 +26,17 @@ locals {
     saude     = local.catalogo_de_servicos.bff.saude
   }
 
+  # So existe quando a autenticacao esta ligada: sem Lambda, ninguem chama a verificacao.
+  verificacao_de_credencial = var.habilitar_autenticacao ? {
+    nome      = local.catalogo_de_servicos.verificacaoDeCredencial.nome
+    node_port = local.catalogo_de_servicos.verificacaoDeCredencial.nodePort
+    saude     = local.catalogo_de_servicos.verificacaoDeCredencial.saude
+  } : null
+
+  # Vem do NLB, nao de gateway. Nula sem a entrada do BFF: sem NLB a Lambda nao tem como
+  # alcancar a verificacao de credencial, porque ela roda na VPC e nao resolve ClusterIP.
+  url_da_verificacao = one(module.entrada_do_bff[*].verificacao_de_credencial_url)
+
   jwt_private_key_pem = one(tls_private_key.jwt[*].private_key_pem_pkcs8)
   jwt_public_key_pem  = one(tls_private_key.jwt[*].public_key_pem)
 
@@ -36,6 +47,7 @@ locals {
       MP_JWT_VERIFY_PUBLICKEY = local.jwt_public_key_pem
       SMALLRYE_JWT_SIGN_KEY   = local.jwt_private_key_pem
     },
+    local.url_da_verificacao == null ? {} : { ST_USU_BASE_URL = local.url_da_verificacao },
     var.lambda_extra_env,
   )
 
@@ -111,42 +123,6 @@ resource "null_resource" "argocd_bootstrap" {
   depends_on = [module.addons]
 }
 
-data "aws_ssm_parameter" "db_endpoint" {
-  count = local.autenticacao
-  name  = "/${var.project}/${var.environment}/db/endpoint"
-}
-
-data "aws_ssm_parameter" "db_port" {
-  count = local.autenticacao
-  name  = "/${var.project}/${var.environment}/db/port"
-}
-
-data "aws_ssm_parameter" "db_name" {
-  count = local.autenticacao
-  name  = "/${var.project}/${var.environment}/db/name"
-}
-
-data "aws_ssm_parameter" "db_username" {
-  count = local.autenticacao
-  name  = "/${var.project}/${var.environment}/db/username"
-}
-
-data "aws_ssm_parameter" "db_password" {
-  count           = local.autenticacao
-  name            = "/${var.project}/${var.environment}/db/password"
-  with_decryption = true
-}
-
-data "aws_ssm_parameter" "db_security_group_id" {
-  count = local.autenticacao
-  name  = "/${var.project}/${var.environment}/db/security-group-id"
-}
-
-data "aws_ssm_parameter" "pool_lambda_max_size" {
-  count = local.autenticacao
-  name  = "/${var.project}/${var.environment}/db/pool/lambda-max-size"
-}
-
 resource "tls_private_key" "jwt" {
   count = local.autenticacao
 
@@ -186,29 +162,9 @@ module "lambda_auth" {
   memory_size        = var.lambda_memory_size
   timeout            = var.lambda_timeout
 
-  db_host     = nonsensitive(data.aws_ssm_parameter.db_endpoint[0].value)
-  db_port     = nonsensitive(data.aws_ssm_parameter.db_port[0].value)
-  db_name     = nonsensitive(data.aws_ssm_parameter.db_name[0].value)
-  db_user     = data.aws_ssm_parameter.db_username[0].value
-  db_password = data.aws_ssm_parameter.db_password[0].value
-
-  db_pool_max_size = tonumber(data.aws_ssm_parameter.pool_lambda_max_size[0].value)
-
   jwt_issuer             = var.jwt_issuer
   jwt_expiration_seconds = var.jwt_expiration_seconds
   extra_env              = local.lambda_env
-}
-
-resource "aws_security_group_rule" "rds_from_lambda" {
-  count = local.autenticacao
-
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  description              = "PostgreSQL a partir da Lambda de autenticacao"
-  security_group_id        = data.aws_ssm_parameter.db_security_group_id[0].value
-  source_security_group_id = module.lambda_auth[0].security_group_id
 }
 
 module "jwt_authorizer" {
@@ -266,7 +222,8 @@ module "entrada_do_bff" {
   node_asg_names         = module.eks.node_group_asg_names
   node_asg_count         = var.node_asg_count
 
-  bff = local.bff_interno
+  bff                       = local.bff_interno
+  verificacao_de_credencial = local.verificacao_de_credencial
 }
 
 resource "aws_ssm_parameter" "api_base_url" {
