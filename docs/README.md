@@ -36,7 +36,9 @@
 | [030](adr/ADR-030-exposicao-do-argocd-escolhida-por-execucao.md) | Exposição do ArgoCD escolhida na execução da esteira |
 | [031](adr/ADR-031-tls-proprio-do-argocd.md) | O ArgoCD serve o próprio TLS *(revoga o `server.insecure` do 021)* |
 | [032](adr/ADR-032-regra-de-sql-injection-no-waf.md) | Regra gerenciada de SQL injection no WAF, e WAF também em HML |
-| [033](adr/ADR-033-api-interna-para-o-bff.md) | API Gateway privada entre o BFF e os microsserviços *(revoga a remoção de VPC Link/NLB/NodePort do 026)* |
+| [033](adr/ADR-033-api-interna-para-o-bff.md) | API Gateway privada entre o BFF e os microsserviços *(exposição superada pelo 035)* *(revoga a remoção de VPC Link/NLB/NodePort do 026)* |
+| [034](adr/ADR-034-exposicao-publica-do-bff.md) | `/bff` e `/bff/{proxy+}` na borda pública, por VPC Link |
+| [035](adr/ADR-035-so-o-bff-atras-de-gateway.md) | Nenhum microsserviço é alcançável por gateway, exceto o BFF *(supera a exposição do 033)* |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura

@@ -13,9 +13,9 @@ module "stack" {
   argocd_expose_lb      = var.argocd_expose_lb
   bootstrap_argocd_apps = var.bootstrap_argocd_apps
 
-  habilitar_autenticacao = var.habilitar_autenticacao
-  habilitar_borda        = var.habilitar_borda
-  habilitar_api_interna  = var.habilitar_api_interna
+  habilitar_autenticacao   = var.habilitar_autenticacao
+  habilitar_borda          = var.habilitar_borda
+  habilitar_entrada_do_bff = var.habilitar_entrada_do_bff
 
   lambda_memory_size = 1024
   lambda_timeout     = 30

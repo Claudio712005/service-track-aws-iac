@@ -5,7 +5,7 @@ habilitadas, a Lambda de autenticação, o API Gateway que a expõe e a API Gate
 qual o BFF alcança os microsserviços.
 
 > **As três flags estão desligadas** (`habilitar_autenticacao`, `habilitar_borda` e
-> `habilitar_api_interna`, todas `false`). Um `apply` hoje entrega rede, EKS, ArgoCD e os
+> `habilitar_entrada_do_bff`, todas `false`). Um `apply` hoje entrega rede, EKS, ArgoCD e os
 > microsserviços descobertos — nada mais. Motivo: cada microsserviço terá o próprio banco e a modelagem de
 > dados da Fase 4 ainda não fechou; sem essa decisão, a Lambda de autenticação (que lê o RDS
 > do monólito) e o gateway (cuja única rota é o login) ficam fora. Ver `IAC-ADR-027`.
@@ -46,7 +46,7 @@ iac/
     lambda/            Lambda de autenticacao (imagem de container) + SG + logs
     lambda-authorizer/ Authorizer de JWT na borda (Go) + testes, opcional
     api-gateway/       REST API a partir do openApi.yaml, usage plans, API keys, CORS, WAF
-    api-interna/       API Gateway PRIVATE + VPC Link + NLB interno, para o BFF chamar os servicos
+    entrada-do-bff/    NLB interno + VPC Link, para a borda publica alcancar o BFF
     stack/             Composicao dos modulos acima
   environments/
     hml/ prd/          Root modules finos, state key servicetrack/<env>
@@ -101,42 +101,41 @@ docs/                  ADRs, RFCs, guia do gateway e diagramas
   Hoje expõe só `POST /autenticacao`, roteado para a Lambda. A URL base vai para
   `/servicetrack/<env>/api/base-url` no SSM.
 
-- **API interna** (`modules/api-interna`, só com `habilitar_api_interna = true`) — uma
-  **segunda** API Gateway, com endpoint `PRIVATE`, que roteia `/<servico>/{proxy+}` para os pods
-  por VPC Link e NLB interno. É o caminho do BFF até os microsserviços (`IAC-ADR-033`). A base
-  vai para `/servicetrack/<env>/api-interna/base-url` no SSM.
+
+- **Entrada do BFF** (`modules/entrada-do-bff`, só com `habilitar_entrada_do_bff = true`) — NLB
+  interno e VPC Link, para a borda pública rotear `/bff` até o NodePort 30083. **Não há API
+  privada e nenhum microsserviço tem rota em gateway** (`IAC-ADR-035`); os serviços falam entre si
+  pelo DNS do cluster.
 
 ## Exposição da API
 
-Há **duas** APIs, e elas não se misturam:
+Há **uma** API pública, e ela expõe duas coisas:
 
 ```
 Internet -> API Gateway REST publico (stage hml|prd)        habilitar_borda
-              '-- POST /autenticacao -> Lambda de autenticacao
-
-BFF (no cluster) -> endpoint de interface na VPC             habilitar_api_interna
-                      '-- API Gateway PRIVATE (stage interna)
-                            '-- VPC Link -> NLB interno -> NodePort -> pod
+              |-- POST /autenticacao      -> Lambda de autenticacao
+              '-- /bff e /bff/{proxy+}    -> VPC Link -> NLB interno -> NodePort 30083 -> BFF
+                                              habilitar_entrada_do_bff
 ```
 
 Na borda pública o gateway aplica API key por consumidor (`x-api-key`), throttling, quota,
 validação de request por JSON Schema, CORS e WAF. Rota fora do contrato responde `403`.
 
-**Nenhum microsserviço é alcançável da internet.** A API interna tem endpoint `PRIVATE`, não
-resolve fora da VPC, e nega por política de recurso qualquer `sourceVpce` que não seja o nosso.
-O NLB é `internal`, e o NodePort só aceita tráfego do security group do NLB. **Não há WAF nela:**
-a AWS não associa WebACL a API Gateway privada — quem fica atrás do WAF é a borda pública.
+**Nenhum microsserviço é alcançável por gateway, exceto o BFF** (`IAC-ADR-035`). Não existe API
+privada: ela foi removida junto com as rotas por serviço e o endpoint de interface do
+`execute-api`. O NLB é `internal`, tem um alvo só — o BFF — e o NodePort 30083 só aceita tráfego
+do security group do NLB.
 
-Fora desse caminho, um microsserviço é alcançado de dentro do cluster (outro pod, pelo DNS do
-Kubernetes) ou por `kubectl port-forward`, que é você usando a própria credencial e não uma
-porta aberta na internet.
+Os serviços falam entre si pelo **DNS do cluster**, e o BFF os alcança pelo mesmo caminho. Fora
+disso, um microsserviço é alcançado por outro pod ou por `kubectl port-forward`, que é você usando
+a própria credencial e não uma porta aberta na internet.
 
-Com as duas flags em `false` — o padrão de hoje — nenhuma das duas APIs existe.
+Com `habilitar_borda = false` — o padrão de hoje — não há entrada pública nenhuma.
 
-Serviço novo na API interna: uma linha em `apis/service-track-api-int/servicos-<ENV>.yaml` e um
-`Service type=NodePort` na mesma porta no repositório do serviço. **As duas metades vivem em
-repositórios diferentes e nada valida o par** — porta divergente aparece como alvo `unhealthy`
-no target group, não como erro de apply.
+**O par porta/NodePort sobrou só para o BFF**, em 30083, entre
+`apis/service-track-api-int/servicos-<ENV>.yaml` e o `Service type=NodePort` do repositório do
+BFF. **As duas metades vivem em repositórios diferentes e nada valida o par** — porta divergente
+aparece como alvo `unhealthy` no target group, não como erro de apply.
 
 Antes de qualquer `apply` que altere o contrato:
 
@@ -236,7 +235,7 @@ A conta é AWS Academy: as credenciais mudam a cada laboratório e as esteiras f
 ```hcl
 habilitar_autenticacao = true   # Lambda + ECR dela + par RS256 + leitura do RDS
 habilitar_borda        = true   # API Gateway publico a partir do contrato EXT
-habilitar_api_interna  = true   # API Gateway privada + VPC Link + NLB interno, para o BFF
+habilitar_entrada_do_bff = true  # NLB interno + VPC Link, para a borda alcancar o BFF
 ```
 
 `habilitar_borda` exige `habilitar_autenticacao`: a única rota publicada é o login, e sem ela
@@ -298,10 +297,6 @@ Destruir HML quando não estiver em uso é o corte mais eficaz.
 | `lambda_function_name` | função de autenticação |
 | `rds_endpoint` | banco lido pela Lambda (vem do SSM do db-infra) |
 | `api_gateway_url` | URL base pública, já com o stage |
-| `api_interna_url` | base da API privada; resolve só de dentro da VPC |
-| `api_interna_bases` | base de cada microsserviço na API privada, para o BFF |
-| `api_interna_id` | ID do REST API privado |
-| `api_interna_vpc_endpoint_id` | endpoint de interface que a política de recurso autoriza |
 | `api_gateway_id` | ID do REST API |
 | `api_consumers` | consumidores habilitados |
 | `api_key_values` | consumidor → API key (sensível) |
@@ -327,7 +322,7 @@ kubectl -n argocd port-forward svc/argocd-server 8081:80
 | Script | Quando |
 |---|---|
 | `bootstrap-tfstate.sh` | antes de tudo, uma vez por conta AWS |
-| `aws-lb-cleanup.sh` | antes de todo `destroy` do stack — remove ELB/ENI órfãos que travam a VPC. Preserva o que tem `ManagedBy=terraform`: o NLB da API interna é destruído pelo `terraform destroy`, na ordem certa |
+| `aws-lb-cleanup.sh` | antes de todo `destroy` do stack — remove ELB/ENI órfãos que travam a VPC. Preserva o que tem `ManagedBy=terraform`: o NLB da entrada do BFF é destruído pelo `terraform destroy`, na ordem certa |
 | `argocd-bootstrap-apply.sh` | chamado pelo apply; reexecutável à mão para registrar um microsserviço novo sem Terraform. Exporte `OPS_TOKEN` para não depender do limite anônimo da API do GitHub |
 | `lambda-bootstrap-image.sh` | fase 2 do bootstrap da Lambda |
 | `validate-openapi.sh` | antes de qualquer apply que altere o contrato |

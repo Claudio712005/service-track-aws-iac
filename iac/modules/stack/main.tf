@@ -10,9 +10,9 @@ locals {
     ManagedBy   = "terraform"
   })
 
-  autenticacao = var.habilitar_autenticacao ? 1 : 0
-  borda        = var.habilitar_borda ? 1 : 0
-  api_interna  = var.habilitar_api_interna ? 1 : 0
+  autenticacao   = var.habilitar_autenticacao ? 1 : 0
+  borda          = var.habilitar_borda ? 1 : 0
+  entrada_do_bff = var.habilitar_entrada_do_bff ? 1 : 0
 
   api_ext_dir = "${path.module}/../../../apis/service-track-api-ext"
   api_int_dir = "${path.module}/../../../apis/service-track-api-int"
@@ -20,21 +20,11 @@ locals {
 
   catalogo_de_servicos = yamldecode(file("${local.api_int_dir}/servicos-${local.env_suffix}.yaml"))
 
-  servicos_internos = [
-    for s in local.catalogo_de_servicos.servicos : {
-      nome      = s.nome
-      node_port = s.nodePort
-      saude     = s.saude
-    }
-  ]
-
-  # O BFF fica no mesmo arquivo porque e a unica lista deste repositorio que cita
-  # microsservico (IAC-ADR-033), mas em chave separada: ele nao e exposto pela API interna.
-  bff_interno = try({
+  bff_interno = {
     nome      = local.catalogo_de_servicos.bff.nome
     node_port = local.catalogo_de_servicos.bff.nodePort
     saude     = local.catalogo_de_servicos.bff.saude
-  }, null)
+  }
 
   jwt_private_key_pem = one(tls_private_key.jwt[*].private_key_pem_pkcs8)
   jwt_public_key_pem  = one(tls_private_key.jwt[*].public_key_pem)
@@ -255,14 +245,14 @@ module "api_gateway" {
   enable_access_logs  = var.enable_api_access_logs
   cloudwatch_role_arn = data.aws_iam_role.lab.arn
 
-  # Sem API interna nao existe NLB nem VPC Link, entao a rota publica do BFF nao e criada.
-  bff_integration_uri = local.api_interna == 1 ? module.api_interna[0].bff_integration_uri : null
-  vpc_link_id         = local.api_interna == 1 ? module.api_interna[0].vpc_link_id : null
+  # Sem a entrada do BFF nao existe NLB nem VPC Link, entao a rota publica do BFF nao e criada.
+  bff_integration_uri = local.entrada_do_bff == 1 ? module.entrada_do_bff[0].bff_integration_uri : null
+  vpc_link_id         = local.entrada_do_bff == 1 ? module.entrada_do_bff[0].vpc_link_id : null
 }
 
-module "api_interna" {
-  source = "../api-interna"
-  count  = local.api_interna
+module "entrada_do_bff" {
+  source = "../entrada-do-bff"
+  count  = local.entrada_do_bff
 
   name        = var.project
   environment = var.environment
@@ -276,17 +266,7 @@ module "api_interna" {
   node_asg_names         = module.eks.node_group_asg_names
   node_asg_count         = var.node_asg_count
 
-  servicos = local.servicos_internos
-  bff      = local.bff_interno
-}
-
-resource "aws_ssm_parameter" "api_interna_base_url" {
-  count = local.api_interna
-
-  name  = "/${var.project}/${var.environment}/api-interna/base-url"
-  type  = "String"
-  value = module.api_interna[0].url_privada
-  tags  = local.tags
+  bff = local.bff_interno
 }
 
 resource "aws_ssm_parameter" "api_base_url" {

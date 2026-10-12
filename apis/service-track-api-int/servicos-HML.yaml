@@ -1,17 +1,3 @@
-servicos:
-  - nome: catalogo
-    nodePort: 30080
-    saude: /actuator/health/readiness
-  - nome: usuarios-veiculos
-    nodePort: 30081
-    saude: /actuator/health/readiness
-  - nome: ordens
-    nodePort: 30082
-    saude: /actuator/health/readiness
-  - nome: checkout
-    nodePort: 30084
-    saude: /actuator/health/readiness
-
 bff:
   nome: bff
   nodePort: 30083

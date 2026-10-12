@@ -46,8 +46,8 @@ variable "bootstrap_argocd_apps" {
   default     = true
 }
 
-variable "habilitar_api_interna" {
-  description = "Cria a API Gateway privada que expoe os microsservicos ao BFF. Ver IAC-ADR-033."
+variable "habilitar_entrada_do_bff" {
+  description = "Cria o NLB interno e o VPC Link que a borda publica usa para alcancar o BFF. Sem ela, habilitar_borda nao tem como rotear /bff. Ver IAC-ADR-035."
   type        = bool
   default     = false
 }
