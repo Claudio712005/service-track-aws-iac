@@ -39,7 +39,7 @@ on:
           - padrao
           - sim
           - nao
-      api_interna:
+      entrada_do_bff:
         description: "Criar a API privada que expoe os microsservicos ao BFF (so vale na camada stack)"
         required: false
         type: choice
@@ -63,7 +63,7 @@ on:
         required: false
         type: string
         default: padrao
-      api_interna:
+      entrada_do_bff:
         required: false
         type: string
         default: padrao
@@ -333,7 +333,7 @@ jobs:
         id: escolhas
         env:
           ESCOLHA_ARGOCD: ${{ inputs.expor_argocd }}
-          ESCOLHA_INTERNA: ${{ inputs.api_interna }}
+          ESCOLHA_INTERNA: ${{ inputs.entrada_do_bff }}
         run: |
           VARS=""
 
@@ -351,7 +351,7 @@ jobs:
           }
 
           traduzir "exposicao do ArgoCD" argocd_expose_lb "$ESCOLHA_ARGOCD"
-          traduzir "API interna" habilitar_api_interna "$ESCOLHA_INTERNA"
+          traduzir "entrada do BFF" habilitar_entrada_do_bff "$ESCOLHA_INTERNA"
 
           echo "vars=${VARS# }" >> "$GITHUB_OUTPUT"
 
@@ -494,8 +494,6 @@ jobs:
             echo "| Autenticacao | ${{ steps.flags.outputs.auth }} |"
             echo "| Borda (API Gateway) | ${{ steps.flags.outputs.borda }} |"
             echo "| URL da API | ${{ steps.outputs.outputs.api_url || '-' }} |"
-            INTERNA="$(terraform -chdir=$WD output -raw api_interna_url 2>/dev/null || echo '')"
-            echo "| API interna (privada) | ${INTERNA:--} |"
             echo "| Contract test | ${{ steps.contract.outcome || 'ignorado' }} |"
             echo "| ECR Lambda | $(terraform -chdir=$WD output -raw lambda_ecr_repository_url 2>/dev/null || echo '-') |"
             echo "| Lambda de autenticacao | $(terraform -chdir=$WD output -raw lambda_function_name 2>/dev/null || echo '-') |"

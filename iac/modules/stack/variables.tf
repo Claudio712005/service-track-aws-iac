@@ -150,7 +150,7 @@ variable "state_bucket" {
   default     = ""
 }
 
-variable "habilitar_api_interna" {
+variable "habilitar_entrada_do_bff" {
   description = "Cria a API Gateway privada, o NLB interno e o VPC Link que expoem os microsservicos listados em apis/service-track-api-int. Exige o Service type=NodePort no repo de cada servico. Ver IAC-ADR-033."
   type        = bool
   default     = false

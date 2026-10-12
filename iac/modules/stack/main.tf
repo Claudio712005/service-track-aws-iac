@@ -10,9 +10,9 @@ locals {
     ManagedBy   = "terraform"
   })
 
-  autenticacao = var.habilitar_autenticacao ? 1 : 0
-  borda        = var.habilitar_borda ? 1 : 0
-  api_interna  = var.habilitar_api_interna ? 1 : 0
+  autenticacao   = var.habilitar_autenticacao ? 1 : 0
+  borda          = var.habilitar_borda ? 1 : 0
+  entrada_do_bff = var.habilitar_entrada_do_bff ? 1 : 0
 
   api_ext_dir = "${path.module}/../../../apis/service-track-api-ext"
   api_int_dir = "${path.module}/../../../apis/service-track-api-int"
@@ -245,14 +245,14 @@ module "api_gateway" {
   enable_access_logs  = var.enable_api_access_logs
   cloudwatch_role_arn = data.aws_iam_role.lab.arn
 
-  # Sem API interna nao existe NLB nem VPC Link, entao a rota publica do BFF nao e criada.
-  bff_integration_uri = local.api_interna == 1 ? module.api_interna[0].bff_integration_uri : null
-  vpc_link_id         = local.api_interna == 1 ? module.api_interna[0].vpc_link_id : null
+  # Sem a entrada do BFF nao existe NLB nem VPC Link, entao a rota publica do BFF nao e criada.
+  bff_integration_uri = local.entrada_do_bff == 1 ? module.entrada_do_bff[0].bff_integration_uri : null
+  vpc_link_id         = local.entrada_do_bff == 1 ? module.entrada_do_bff[0].vpc_link_id : null
 }
 
-module "api_interna" {
-  source = "../api-interna"
-  count  = local.api_interna
+module "entrada_do_bff" {
+  source = "../entrada-do-bff"
+  count  = local.entrada_do_bff
 
   name        = var.project
   environment = var.environment
