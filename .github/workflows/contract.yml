@@ -27,6 +27,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  higiene:
+    name: "Higiene do repositorio"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nenhuma chave privada rastreada
+        run: |
+          RASTREADOS="$(git ls-files | grep -iE '\.(pem|key|p12|jks)$' || true)"
+          if [ -n "$RASTREADOS" ]; then
+            echo "::error::Material sensivel versionado:"
+            echo "$RASTREADOS"
+            exit 1
+          fi
+          echo "Nenhum arquivo de chave rastreado."
+
+      - name: Nenhum estado do Terraform rastreado
+        run: |
+          RASTREADOS="$(git ls-files | grep -E '\.tfstate|\.tfvars$' || true)"
+          if [ -n "$RASTREADOS" ]; then
+            echo "::error::State ou tfvars versionado:"
+            echo "$RASTREADOS"
+            exit 1
+          fi
+          echo "Nenhum state nem tfvars rastreado."
+
+      - name: Apenas as entradas previstas na raiz
+        run: |
+          PREVISTAS=".github .gitattributes .gitignore README.md apis docs iac kubernetes scripts"
+          INESPERADAS=""
+          for entrada in $(git ls-files | cut -d/ -f1 | sort -u); do
+            case " $PREVISTAS " in
+              *" $entrada "*) ;;
+              *) INESPERADAS="$INESPERADAS $entrada" ;;
+            esac
+          done
+          if [ -n "$INESPERADAS" ]; then
+            echo "::error::Entrada nao prevista na raiz do repositorio:$INESPERADAS"
+            echo "Se for intencional, inclua na lista PREVISTAS desta etapa."
+            exit 1
+          fi
+          echo "Raiz do repositorio com as entradas previstas."
+
   openapi:
     name: "Contrato OpenAPI"
     runs-on: ubuntu-latest
