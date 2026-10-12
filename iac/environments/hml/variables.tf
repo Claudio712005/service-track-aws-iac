@@ -10,15 +10,15 @@ variable "argocd_expose_lb" {
 }
 
 variable "habilitar_autenticacao" {
-  description = "Cria a Lambda de autenticacao e a leitura do banco. Desligada ate a modelagem de dados da Fase 4 fechar."
+  description = "Cria a Lambda de autenticacao, o ECR dela e o par RS256. Ligada por padrao (IAC-ADR-036): a autenticacao e passo normal da subida. Depende do service-track-usuarios-veiculos de pe, que e quem confere a credencial."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "habilitar_borda" {
-  description = "Cria o API Gateway. Exige habilitar_autenticacao. Desligada: os microsservicos nao sao alcancaveis de fora do cluster."
+  description = "Cria o API Gateway publico. Ligada por padrao (IAC-ADR-036): e por ela que POST /autenticacao e /bff ficam alcancaveis. Exige habilitar_autenticacao."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "lambda_extra_env" {
@@ -47,7 +47,7 @@ variable "bootstrap_argocd_apps" {
 }
 
 variable "habilitar_entrada_do_bff" {
-  description = "Cria o NLB interno e o VPC Link que a borda publica usa para alcancar o BFF. Sem ela, habilitar_borda nao tem como rotear /bff. Ver IAC-ADR-035."
+  description = "Cria o NLB interno e o VPC Link. Ligada por padrao (IAC-ADR-036): e o caminho da borda ate o BFF e da Lambda ate a verificacao de credencial. Exigida por habilitar_autenticacao."
   type        = bool
-  default     = false
+  default     = true
 }
