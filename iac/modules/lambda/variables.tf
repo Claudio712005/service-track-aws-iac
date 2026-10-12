@@ -36,28 +36,6 @@ variable "timeout" {
   default = 30
 }
 
-variable "db_host" {
-  type = string
-}
-
-variable "db_port" {
-  type    = number
-  default = 5432
-}
-
-variable "db_name" {
-  type = string
-}
-
-variable "db_user" {
-  type = string
-}
-
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "jwt_issuer" {
   type    = string
   default = "service-track-api"
@@ -74,8 +52,3 @@ variable "extra_env" {
   default     = {}
 }
 
-variable "db_pool_max_size" {
-  description = "Conexoes maximas por container. Orcamento definido em service-track-db-infra. Ver DB-ADR-004."
-  type        = number
-  default     = 2
-}

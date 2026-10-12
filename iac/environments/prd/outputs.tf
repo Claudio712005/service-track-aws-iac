@@ -27,10 +27,6 @@ output "jwt_public_key_parameter" {
   value = module.stack.jwt_public_key_parameter
 }
 
-output "rds_endpoint" {
-  value = module.stack.rds_endpoint
-}
-
 output "api_gateway_url" {
   value = module.stack.api_gateway_url
 }
