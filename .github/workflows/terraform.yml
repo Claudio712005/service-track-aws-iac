@@ -314,9 +314,11 @@ jobs:
           fi
 
           if [ "${{ steps.flags.outputs.auth }}" = "true" ] \
-             && ! aws ssm get-parameter --name "/servicetrack/$ENV/db/endpoint" >/dev/null 2>&1; then
-            echo "::error::habilitar_autenticacao = true exige o banco de $ENV aplicado."
-            echo "::error::Rode antes a esteira Terraform do repositorio service-track-db-infra (env=$ENV)."
+             && ! aws ssm get-parameter --name "/servicetrack/$ENV/usuarios-veiculos/db/endpoint" >/dev/null 2>&1; then
+            echo "::error::habilitar_autenticacao = true exige a infraestrutura do servico de usuarios."
+            echo "::error::Quem confere a credencial e o service-track-usuarios-veiculos, nao esta plataforma:"
+            echo "::error::a Lambda chama POST /credenciais/verificacao nele e nao tem banco proprio."
+            echo "::error::Rode antes a esteira Infra do repositorio service-track-usuarios-veiculos (env=$ENV)."
             faltando=1
           fi
 
@@ -438,6 +440,34 @@ jobs:
             sleep 10
           done
           echo "::warning::O LoadBalancer do ArgoCD foi criado mas ainda nao tem endereco depois de 3 minutos."
+
+      - name: Conferir se a autenticacao tem quem confira credencial
+        if: inputs.action == 'apply'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+          AUTH: ${{ steps.flags.outputs.auth }}
+        run: |
+          [ "$AUTH" = "true" ] || { echo "autenticacao desligada nesta execucao: nada a conferir."; exit 0; }
+
+          NS=service-track-usuarios-veiculos
+
+          if ! kubectl get deployment "$NS" -n "$NS" >/dev/null 2>&1; then
+            echo "::warning::A Lambda de autenticacao esta de pe, e o servico de usuarios ainda nao."
+            echo "::warning::POST /autenticacao vai responder erro ate o ArgoCD sincronizar o"
+            echo "::warning::overlay de $ENV_ALVO e a esteira CD do service-track-usuarios-veiculos publicar a imagem."
+            echo "::warning::Nao e defeito desta esteira: a plataforma nao deploya microsservico."
+            exit 0
+          fi
+
+          PRONTAS="$(kubectl get deployment "$NS" -n "$NS" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)"
+          if [ "${PRONTAS:-0}" -lt 1 ]; then
+            echo "::warning::O servico de usuarios existe mas nenhuma replica esta pronta."
+            echo "::warning::POST /autenticacao vai responder erro enquanto isso. Conferir:"
+            echo "::warning::  kubectl get pods -n $NS"
+            exit 0
+          fi
+
+          echo "servico de usuarios com $PRONTAS replica(s) pronta(s): a autenticacao tem quem confira credencial."
 
       - name: Coletar outputs
         id: outputs
