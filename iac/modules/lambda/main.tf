@@ -34,14 +34,6 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = merge({
-      POSTGRES_HOST     = var.db_host
-      POSTGRES_PORT     = tostring(var.db_port)
-      POSTGRES_DB       = var.db_name
-      POSTGRES_USER     = var.db_user
-      POSTGRES_PASSWORD = var.db_password
-
-      DB_POOL_MAX_SIZE = tostring(var.db_pool_max_size)
-
       MP_JWT_VERIFY_ISSUER                = var.jwt_issuer
       SERVICETRACK_JWT_EXPIRACAO_SEGUNDOS = tostring(var.jwt_expiration_seconds)
     }, var.extra_env)

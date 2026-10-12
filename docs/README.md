@@ -39,6 +39,7 @@
 | [033](adr/ADR-033-api-interna-para-o-bff.md) | API Gateway privada entre o BFF e os microsserviços *(exposição superada pelo 035)* *(revoga a remoção de VPC Link/NLB/NodePort do 026)* |
 | [034](adr/ADR-034-exposicao-publica-do-bff.md) | `/bff` e `/bff/{proxy+}` na borda pública, por VPC Link |
 | [035](adr/ADR-035-so-o-bff-atras-de-gateway.md) | Nenhum microsserviço é alcançável por gateway, exceto o BFF *(supera a exposição do 033)* |
+| [036](adr/ADR-036-autenticacao-ligada-por-padrao.md) | Autenticação é passo normal da subida, e não depende mais do banco compartilhado *(supera o 027)* |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura

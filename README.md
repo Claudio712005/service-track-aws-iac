@@ -1,14 +1,19 @@
 # service-track-aws-iac
 
-Plataforma AWS compartilhada do ServiceTrack: rede, cluster EKS com ArgoCD e, quando
-habilitadas, a Lambda de autenticação, o API Gateway que a expõe e a API Gateway privada pela
-qual o BFF alcança os microsserviços.
+Plataforma AWS compartilhada do ServiceTrack: rede, cluster EKS com ArgoCD, a Lambda de
+autenticação, o API Gateway público que a expõe e o NLB interno pelo qual a borda alcança o BFF.
 
-> **As três flags estão desligadas** (`habilitar_autenticacao`, `habilitar_borda` e
-> `habilitar_entrada_do_bff`, todas `false`). Um `apply` hoje entrega rede, EKS, ArgoCD e os
-> microsserviços descobertos — nada mais. Motivo: cada microsserviço terá o próprio banco e a modelagem de
-> dados da Fase 4 ainda não fechou; sem essa decisão, a Lambda de autenticação (que lê o RDS
-> do monólito) e o gateway (cuja única rota é o login) ficam fora. Ver `IAC-ADR-027`.
+> **As três flags da plataforma estão `true` por padrão** (`habilitar_autenticacao`,
+> `habilitar_borda`, `habilitar_entrada_do_bff`) desde o `IAC-ADR-036`. Um `apply` entrega
+> rede, EKS, ArgoCD, a descoberta dos microsserviços, a **Lambda de autenticação**, o
+> **API Gateway público** e o **NLB interno** até o BFF.
+>
+> Elas andam juntas por dependência real, validada no `plan`: a borda exige a autenticação,
+> e a autenticação exige a entrada do BFF, porque a Lambda alcança a verificação de
+> credencial pelo NLB.
+>
+> **Pré-requisito da autenticação é o `service-track-usuarios-veiculos`, não o banco**: a
+> Lambda não tem datasource e só pergunta `POST /credenciais/verificacao`.
 
 **Este repositório cita microsserviço em um arquivo só.** Não há manifesto de aplicação,
 repositório de imagem de aplicação, rota de negócio nem bloco `module` por serviço aqui. Cada
@@ -130,7 +135,7 @@ Os serviços falam entre si pelo **DNS do cluster**, e o BFF os alcança pelo me
 disso, um microsserviço é alcançado por outro pod ou por `kubectl port-forward`, que é você usando
 a própria credencial e não uma porta aberta na internet.
 
-Com `habilitar_borda = false` — o padrão de hoje — não há entrada pública nenhuma.
+`habilitar_borda = false` tira a entrada pública inteira, e com ela o login. Não é o padrão desde o `IAC-ADR-036`.
 
 **O par porta/NodePort sobrou só para o BFF**, em 30083, entre
 `apis/service-track-api-int/servicos-<ENV>.yaml` e o `Service type=NodePort` do repositório do

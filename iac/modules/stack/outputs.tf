@@ -36,11 +36,6 @@ output "jwt_public_key_parameter" {
   value       = one(aws_ssm_parameter.jwt_public_key[*].name)
 }
 
-output "rds_endpoint" {
-  description = "Lido do SSM publicado pelo repositorio service-track-db-infra. Nulo sem autenticacao."
-  value       = one(data.aws_ssm_parameter.db_endpoint[*].value)
-}
-
 output "api_gateway_url" {
   description = "URL base publica da API, com o stage. Nula sem borda."
   value       = one(module.api_gateway[*].api_endpoint)
