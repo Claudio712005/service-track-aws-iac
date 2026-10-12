@@ -109,35 +109,33 @@ docs/                  ADRs, RFCs, guia do gateway e diagramas
 
 ## Exposição da API
 
-Há **duas** APIs, e elas não se misturam:
+Há **uma** API pública, e ela expõe duas coisas:
 
 ```
 Internet -> API Gateway REST publico (stage hml|prd)        habilitar_borda
-              '-- POST /autenticacao -> Lambda de autenticacao
-
-borda publica -> VPC Link -> NLB interno -> BFF              habilitar_entrada_do_bff
-                      '-- API Gateway PRIVATE (stage interna)
-                            '-- VPC Link -> NLB interno -> NodePort -> pod
+              |-- POST /autenticacao      -> Lambda de autenticacao
+              '-- /bff e /bff/{proxy+}    -> VPC Link -> NLB interno -> NodePort 30083 -> BFF
+                                              habilitar_entrada_do_bff
 ```
 
 Na borda pública o gateway aplica API key por consumidor (`x-api-key`), throttling, quota,
 validação de request por JSON Schema, CORS e WAF. Rota fora do contrato responde `403`.
 
-**Nenhum microsserviço é alcançável da internet.** A API interna tem endpoint `PRIVATE`, não
-resolve fora da VPC, e nega por política de recurso qualquer `sourceVpce` que não seja o nosso.
-O NLB é `internal`, e o NodePort só aceita tráfego do security group do NLB. **Não há WAF nela:**
-a AWS não associa WebACL a API Gateway privada — quem fica atrás do WAF é a borda pública.
+**Nenhum microsserviço é alcançável por gateway, exceto o BFF** (`IAC-ADR-035`). Não existe API
+privada: ela foi removida junto com as rotas por serviço e o endpoint de interface do
+`execute-api`. O NLB é `internal`, tem um alvo só — o BFF — e o NodePort 30083 só aceita tráfego
+do security group do NLB.
 
-Fora desse caminho, um microsserviço é alcançado de dentro do cluster (outro pod, pelo DNS do
-Kubernetes) ou por `kubectl port-forward`, que é você usando a própria credencial e não uma
-porta aberta na internet.
+Os serviços falam entre si pelo **DNS do cluster**, e o BFF os alcança pelo mesmo caminho. Fora
+disso, um microsserviço é alcançado por outro pod ou por `kubectl port-forward`, que é você usando
+a própria credencial e não uma porta aberta na internet.
 
-Com as duas flags em `false` — o padrão de hoje — nenhuma das duas APIs existe.
+Com `habilitar_borda = false` — o padrão de hoje — não há entrada pública nenhuma.
 
-Serviço novo na API interna: uma linha em `apis/service-track-api-int/servicos-<ENV>.yaml` e um
-`Service type=NodePort` na mesma porta no repositório do serviço. **As duas metades vivem em
-repositórios diferentes e nada valida o par** — porta divergente aparece como alvo `unhealthy`
-no target group, não como erro de apply.
+**O par porta/NodePort sobrou só para o BFF**, em 30083, entre
+`apis/service-track-api-int/servicos-<ENV>.yaml` e o `Service type=NodePort` do repositório do
+BFF. **As duas metades vivem em repositórios diferentes e nada valida o par** — porta divergente
+aparece como alvo `unhealthy` no target group, não como erro de apply.
 
 Antes de qualquer `apply` que altere o contrato:
 
@@ -324,7 +322,7 @@ kubectl -n argocd port-forward svc/argocd-server 8081:80
 | Script | Quando |
 |---|---|
 | `bootstrap-tfstate.sh` | antes de tudo, uma vez por conta AWS |
-| `aws-lb-cleanup.sh` | antes de todo `destroy` do stack — remove ELB/ENI órfãos que travam a VPC. Preserva o que tem `ManagedBy=terraform`: o NLB da API interna é destruído pelo `terraform destroy`, na ordem certa |
+| `aws-lb-cleanup.sh` | antes de todo `destroy` do stack — remove ELB/ENI órfãos que travam a VPC. Preserva o que tem `ManagedBy=terraform`: o NLB da entrada do BFF é destruído pelo `terraform destroy`, na ordem certa |
 | `argocd-bootstrap-apply.sh` | chamado pelo apply; reexecutável à mão para registrar um microsserviço novo sem Terraform. Exporte `OPS_TOKEN` para não depender do limite anônimo da API do GitHub |
 | `lambda-bootstrap-image.sh` | fase 2 do bootstrap da Lambda |
 | `validate-openapi.sh` | antes de qualquer apply que altere o contrato |
