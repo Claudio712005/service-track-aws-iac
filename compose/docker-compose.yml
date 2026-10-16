@@ -1,0 +1,409 @@
+name: service-track
+
+x-otel: &otel
+  OTEL_JAVAAGENT_ENABLED: "true"
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=servicetrack,deployment.environment=compose
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_LOGS_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: none
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://tempo:4317
+  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: grpc
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://loki:3100/otlp/v1/logs
+  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: http/protobuf
+  OTEL_TRACES_SAMPLER: parentbased_always_on
+  OTEL_PROPAGATORS: tracecontext,baggage
+  OTEL_INSTRUMENTATION_LOGBACK_APPENDER_EXPERIMENTAL_LOG_ATTRIBUTES: "true"
+  OTEL_INSTRUMENTATION_LOGBACK_APPENDER_EXPERIMENTAL_CAPTURE_MDC_ATTRIBUTES: "*"
+
+x-sonda-http: &sonda-http
+  interval: 10s
+  timeout: 5s
+  retries: 30
+  start_period: 40s
+
+services:
+
+  postgres-catalogo:
+    image: postgres:16
+    container_name: st-cat-postgres
+    environment:
+      POSTGRES_DB: st_cat
+      POSTGRES_USER: st_cat_user
+      POSTGRES_PASSWORD: st_cat_local
+    ports:
+      - "${PORTA_POSTGRES_CATALOGO:-5432}:5432"
+    volumes:
+      - ${REPOS_DIR:-../..}/microsservicos/service-track-catalogo/db/postgres:/docker-entrypoint-initdb.d:ro
+      - postgres-catalogo:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U st_cat_user -d st_cat"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres-ordens:
+    image: postgres:16
+    container_name: st-ord-postgres
+    environment:
+      POSTGRES_DB: st_ord
+      POSTGRES_USER: st_ord_user
+      POSTGRES_PASSWORD: st_ord_local
+    ports:
+      - "${PORTA_POSTGRES_ORDENS:-5433}:5432"
+    volumes:
+      - ${REPOS_DIR:-../..}/microsservicos/service-track-ordem/db/postgres:/docker-entrypoint-initdb.d:ro
+      - postgres-ordens:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U st_ord_user -d st_ord"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres-usuarios:
+    image: postgres:16
+    container_name: st-usu-postgres
+    environment:
+      POSTGRES_DB: st_usu
+      POSTGRES_USER: st_usu_user
+      POSTGRES_PASSWORD: st_usu_local
+    ports:
+      - "${PORTA_POSTGRES_USUARIOS:-5434}:5432"
+    volumes:
+      - ${REPOS_DIR:-../..}/microsservicos/service-track-usuarios-veiculos/db/postgres:/docker-entrypoint-initdb.d:ro
+      - postgres-usuarios:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U st_usu_user -d st_usu"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres-checkout:
+    image: postgres:16
+    container_name: st-chk-postgres
+    environment:
+      POSTGRES_DB: st_chk
+      POSTGRES_USER: st_chk_user
+      POSTGRES_PASSWORD: st_chk_local
+    ports:
+      - "${PORTA_POSTGRES_CHECKOUT:-5435}:5432"
+    volumes:
+      - ${REPOS_DIR:-../..}/microsservicos/service-track-checkout/db/postgres:/docker-entrypoint-initdb.d:ro
+      - postgres-checkout:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U st_chk_user -d st_chk"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo:
+    image: mongo:7
+    container_name: st-ins-mongo
+    environment:
+      MONGO_INITDB_DATABASE: ST_INS
+    ports:
+      - "${PORTA_MONGO:-27017}:27017"
+    volumes:
+      - ${REPOS_DIR:-../..}/microsservicos/service-track-catalogo/db/mongo:/docker-entrypoint-initdb.d:ro
+      - mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: st-usu-redis
+    ports:
+      - "${PORTA_REDIS:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: st-ord-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNO://:9092,EXTERNO://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka:9092,EXTERNO://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNO:PLAINTEXT,EXTERNO:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNO
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "${PORTA_KAFKA:-29092}:29092"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+
+  topicos:
+    image: apache/kafka:3.9.0
+    container_name: st-topicos
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for topico in servicetrack.estoque.comandos.v1 servicetrack.estoque.comandos.v1.dlt servicetrack.estoque.eventos.v1; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
+            --create --if-not-exists --topic "$$topico" --partitions 3 --replication-factor 1
+        done
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
+
+  catalogo:
+    build:
+      context: ${REPOS_DIR:-../..}/microsservicos/service-track-catalogo/software
+    image: servicetrack-catalogo:local
+    container_name: st-cat-app
+    depends_on:
+      postgres-catalogo:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      topicos:
+        condition: service_completed_successfully
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: service-track-catalogo
+      SPRING_PROFILES_ACTIVE: dev
+      ST_CAT_DB_URL: jdbc:postgresql://postgres-catalogo:5432/st_cat
+      ST_CAT_DB_USER: st_cat_user
+      ST_CAT_DB_PASSWORD: st_cat_local
+      ST_CAT_DB_POOL_MAX: 10
+      ST_CAT_DB_POOL_MIN: 2
+      MONGODB_URI: mongodb://mongo:27017/ST_INS
+      SERVICETRACK_MENSAGERIA_HABILITADA: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus,metrics
+    ports:
+      - "${PORTA_CATALOGO:-8080}:8080"
+    healthcheck:
+      <<: *sonda-http
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+
+  usuarios-veiculos:
+    build:
+      context: ${REPOS_DIR:-../..}/microsservicos/service-track-usuarios-veiculos/software
+    image: servicetrack-usuarios-veiculos:local
+    container_name: st-usu-app
+    depends_on:
+      postgres-usuarios:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: service-track-usuarios-veiculos
+      ST_USU_DB_URL: jdbc:postgresql://postgres-usuarios:5432/st_usu
+      ST_USU_DB_USER: st_usu_user
+      ST_USU_DB_PASSWORD: st_usu_local
+      ST_USU_REDIS_HOST: redis
+      ST_USU_REDIS_PORT: 6379
+      ST_USU_FORMATO_DE_LOG: logstash
+    ports:
+      - "${PORTA_USUARIOS:-8081}:8080"
+    healthcheck:
+      <<: *sonda-http
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+
+  ordens:
+    build:
+      context: ${REPOS_DIR:-../..}/microsservicos/service-track-ordem/software
+    image: servicetrack-ordens:local
+    container_name: st-ord-app
+    depends_on:
+      postgres-ordens:
+        condition: service_healthy
+      topicos:
+        condition: service_completed_successfully
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: service-track-ordens
+      ST_ORD_DB_URL: jdbc:postgresql://postgres-ordens:5432/st_ord
+      ST_ORD_DB_USER: st_ord_user
+      ST_ORD_DB_PASSWORD: st_ord_local
+      ST_ORD_DB_POOL_MAX: 10
+      ST_ORD_DB_POOL_MIN: 2
+      ST_ORD_MESSAGING_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "${PORTA_ORDENS:-8082}:8080"
+    healthcheck:
+      <<: *sonda-http
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+
+  checkout:
+    build:
+      context: ${REPOS_DIR:-../..}/microsservicos/service-track-checkout/software
+    image: servicetrack-checkout:local
+    container_name: st-chk-app
+    depends_on:
+      postgres-checkout:
+        condition: service_healthy
+      ordens:
+        condition: service_healthy
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: service-track-checkout
+      ST_CHK_DB_URL: jdbc:postgresql://postgres-checkout:5432/st_chk
+      ST_CHK_DB_USER: st_chk_user
+      ST_CHK_DB_PASSWORD: st_chk_local
+      ST_CHK_DB_POOL_MAX: 10
+      ST_CHK_DB_POOL_MIN: 2
+      URL_SERVICE_ORDER_GET: http://ordens:8080/ordens
+      MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-}
+      MERCADO_PAGO_WEBHOOK_SECRET: ${MERCADO_PAGO_WEBHOOK_SECRET:-}
+      MERCADO_PAGO_VERIFY_SIGNATURE: ${MERCADO_PAGO_VERIFY_SIGNATURE:-false}
+    ports:
+      - "${PORTA_CHECKOUT:-8084}:8080"
+    healthcheck:
+      <<: *sonda-http
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+
+  bff:
+    build:
+      context: ${REPOS_DIR:-../..}/microsservicos/service-track-bff/software
+    image: servicetrack-bff:local
+    container_name: st-bff-app
+    depends_on:
+      catalogo:
+        condition: service_healthy
+      usuarios-veiculos:
+        condition: service_healthy
+      ordens:
+        condition: service_healthy
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: service-track-bff
+      ST_BFF_CATALOGO_URL: http://catalogo:8080
+      ST_BFF_USUARIOS_URL: http://usuarios-veiculos:8080
+      ST_BFF_ORDENS_URL: http://ordens:8080
+      ST_BFF_JWT_ENABLED: ${ST_BFF_JWT_ENABLED:-false}
+      ST_BFF_JWT_PUBLIC_KEY: ${ST_BFF_JWT_PUBLIC_KEY:-classpath:publicKey.pem}
+      ST_BFF_LOG_FORMAT: logstash
+    ports:
+      - "${PORTA_BFF:-8083}:8080"
+    healthcheck:
+      <<: *sonda-http
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: st-usu-redis-exporter
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    ports:
+      - "${PORTA_REDIS_EXPORTER:-9121}:9121"
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: st-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=6h
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+      - --web.enable-lifecycle
+    ports:
+      - "${PORTA_PROMETHEUS:-9090}:9090"
+    volumes:
+      - ./observabilidade/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: st-tempo
+    user: "0:0"
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "${PORTA_TEMPO:-3200}:3200"
+    volumes:
+      - ./observabilidade/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo:/var/tempo
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: st-loki
+    user: "0:0"
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    ports:
+      - "${PORTA_LOKI:-3100}:3100"
+    volumes:
+      - ./observabilidade/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: st-grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_DEFAULT_THEME: dark
+      GF_LOG_LEVEL: warn
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_FEATURE_TOGGLES_ENABLE: traceqlStreaming
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/plataforma.json
+    ports:
+      - "${PORTA_GRAFANA:-3000}:3000"
+    volumes:
+      - ./observabilidade/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observabilidade/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  postgres-catalogo:
+  postgres-ordens:
+  postgres-usuarios:
+  postgres-checkout:
+  mongo:
+  prometheus:
+  tempo:
+  loki:
+  grafana:
