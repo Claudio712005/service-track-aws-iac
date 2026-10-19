@@ -73,6 +73,7 @@ scripts/               Operacao e diagnostico (ver "Scripts")
 docs/                  ADRs, RFCs, guia do gateway e diagramas
 
 .github/workflows/
+  orquestrar-ambiente.yml Sobe o ambiente inteiro, disparando a esteira de cada repo (IAC-ADR-038)
   subir-ambiente.yml     Rede e stack de um ambiente, na ordem
   destruir-ambiente.yml  Stack, e opcionalmente rede, na ordem inversa
   terraform.yml          plan / apply / destroy de uma camada (manual ou chamado pelas duas acima)

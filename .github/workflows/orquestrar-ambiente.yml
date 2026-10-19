@@ -1,0 +1,501 @@
+name: Orquestrar ambiente
+
+run-name: "Orquestrar ${{ inputs.env }} por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Ambiente alvo"
+        required: true
+        type: choice
+        options: [hml, prd]
+        default: hml
+      ate:
+        description: "Onde parar"
+        required: true
+        type: choice
+        options:
+          - plataforma
+          - infraestrutura-dos-servicos
+          - imagens-publicadas
+          - ambiente-completo
+        default: ambiente-completo
+      mesclar_prs_do_cd:
+        description: "Mesclar sozinho os PRs de tag que o CD abrir"
+        required: false
+        type: boolean
+        default: true
+      expor_argocd:
+        description: "Expor o ArgoCD por LoadBalancer"
+        required: false
+        type: choice
+        options: [padrao, sim, nao]
+        default: padrao
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orquestracao-${{ inputs.env }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  DONO: Claudio712005
+
+jobs:
+
+  preparar:
+    name: "0. Conferir o que a orquestracao precisa"
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    outputs:
+      servicos: ${{ steps.escopo.outputs.servicos }}
+      imagens: ${{ steps.escopo.outputs.imagens }}
+      completo: ${{ steps.escopo.outputs.completo }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir o token que atravessa repositorio
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::OPS_TOKEN ausente. A orquestracao dispara esteira de outro repositorio"
+            echo "::error::e precisa de um token com Actions: read and write nos repositorios de destino."
+            exit 1
+          fi
+          if ! gh api user --jq .login >/dev/null 2>&1; then
+            echo "::error::OPS_TOKEN nao autentica na API do GitHub."
+            exit 1
+          fi
+          echo "token ok"
+
+      - name: Conferir as credenciais da AWS
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          if ! CONTA="$(aws sts get-caller-identity --query Account --output text 2>&1)"; then
+            echo "::error::As credenciais da AWS nao autenticam. Renove no laboratorio e"
+            echo "::error::rode a esteira Credenciais AWS antes desta."
+            echo "$CONTA"
+            exit 1
+          fi
+          echo "conta $CONTA"
+
+      - name: Resolver o escopo
+        id: escopo
+        env:
+          ATE: ${{ inputs.ate }}
+        run: |
+          servicos=false; imagens=false; completo=false
+          case "$ATE" in
+            infraestrutura-dos-servicos) servicos=true ;;
+            imagens-publicadas)          servicos=true; imagens=true ;;
+            ambiente-completo)           servicos=true; imagens=true; completo=true ;;
+          esac
+          {
+            echo "servicos=$servicos"
+            echo "imagens=$imagens"
+            echo "completo=$completo"
+          } >> "$GITHUB_OUTPUT"
+          echo "ate=$ATE servicos=$servicos imagens=$imagens completo=$completo"
+
+      - name: Plano
+        env:
+          ATE: ${{ inputs.ate }}
+          ENV_ALVO: ${{ inputs.env }}
+        run: |
+          {
+            echo "## Orquestracao de \`$ENV_ALVO\`"
+            echo ""
+            echo "Parando em \`$ATE\`. Cada fase dispara a esteira do repositorio dono e espera o fim."
+            echo ""
+            echo "| Fase | O que faz |"
+            echo "|---|---|"
+            echo "| 1 | Rede da plataforma |"
+            echo "| 2 | Infra do servico de usuarios — publica o endpoint que a fase 3 exige |"
+            echo "| 3 | Stack: EKS, ArgoCD, Lambda, gateway e NLB |"
+            echo "| 4 | Segredo do JWT no BFF, baseline do banco de usuarios, infra dos outros quatro |"
+            echo "| 5 | CD dos cinco servicos |"
+            echo "| 6 | Mesclar os PRs de tag |"
+            echo "| 7 | Esperar o servico de usuarios responder no cluster |"
+            echo "| 8 | CD da Lambda — depende da fase 7 |"
+            echo "| 9 | Conferir o ambiente |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  rede:
+    name: "1. Rede"
+    needs: preparar
+    uses: ./.github/workflows/terraform.yml
+    with:
+      action: apply
+      env: ${{ inputs.env }}
+      camada: rede
+    secrets: inherit
+
+  usuarios_infra:
+    name: "2. Infra do servico de usuarios"
+    needs: rede
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    outputs:
+      resumo: ${{ steps.disparar.outputs.run_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disparar a esteira Infra
+        id: disparar
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          bash scripts/disparar-esteira.sh \
+            "$DONO/service-track-usuarios-veiculos" infra.yml \
+            "env=${{ inputs.env }}" "acao=apply"
+
+  stack:
+    name: "3. Stack da plataforma"
+    needs: usuarios_infra
+    uses: ./.github/workflows/terraform.yml
+    with:
+      action: apply
+      env: ${{ inputs.env }}
+      camada: stack
+      expor_argocd: ${{ inputs.expor_argocd }}
+    secrets: inherit
+
+  bff_segredos:
+    name: "4a. Segredo do JWT no BFF"
+    needs: stack
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disparar a esteira Segredos
+        id: disparar
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          bash scripts/disparar-esteira.sh \
+            "$DONO/service-track-bff" segredos.yml "env=${{ inputs.env }}"
+
+  usuarios_banco:
+    name: "4b. Baseline do banco de usuarios"
+    needs: stack
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disparar a esteira Banco
+        id: disparar
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          bash scripts/disparar-esteira.sh \
+            "$DONO/service-track-usuarios-veiculos" banco.yml "env=${{ inputs.env }}"
+
+  servicos_infra:
+    name: "4c. Infra de ${{ matrix.servico }}"
+    needs: [preparar, stack]
+    if: needs.preparar.outputs.servicos == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        servico: [service-track-catalogo, service-track-ordens, service-track-checkout, service-track-bff]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disparar a esteira Infra
+        id: disparar
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          bash scripts/disparar-esteira.sh \
+            "$DONO/${{ matrix.servico }}" infra.yml \
+            "env=${{ inputs.env }}" "acao=apply"
+
+  servicos_cd:
+    name: "5. CD de ${{ matrix.servico }}"
+    needs: [preparar, servicos_infra, usuarios_banco]
+    if: needs.preparar.outputs.imagens == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        servico:
+          - service-track-usuarios-veiculos
+          - service-track-catalogo
+          - service-track-ordens
+          - service-track-checkout
+          - service-track-bff
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disparar a esteira CD
+        id: disparar
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          bash scripts/disparar-esteira.sh \
+            "$DONO/${{ matrix.servico }}" cd.yml "env=${{ inputs.env }}"
+
+  mesclar:
+    name: "6. Mesclar os PRs de tag"
+    needs: [preparar, servicos_cd, bff_segredos]
+    if: needs.preparar.outputs.completo == 'true' && inputs.mesclar_prs_do_cd
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mesclar o PR de cada servico
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+          ENV_ALVO: ${{ inputs.env }}
+        run: |
+          falhou=0
+          for servico in service-track-usuarios-veiculos service-track-catalogo \
+                         service-track-ordens service-track-checkout service-track-bff; do
+            bash scripts/mesclar-pr-de-deploy.sh "$DONO/$servico" "$ENV_ALVO" || falhou=1
+          done
+          [ "$falhou" -eq 0 ] || {
+            echo "::error::Pelo menos um PR de tag nao foi mesclado. O ArgoCD segue na imagem anterior."
+            exit 1
+          }
+
+  usuarios_pronto:
+    name: "7. Esperar o servico de usuarios responder"
+    needs: [preparar, mesclar]
+    if: needs.preparar.outputs.completo == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Esperar replica pronta
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+        run: |
+          aws eks update-kubeconfig --name "servicetrack-$ENV_ALVO" --region "$AWS_REGION" >/dev/null
+          bash scripts/aguardar-rollout.sh \
+            service-track-usuarios-veiculos service-track-usuarios-veiculos
+
+  lambda_cd:
+    name: "8. CD da Lambda de autenticacao"
+    needs: [preparar, usuarios_pronto]
+    if: needs.preparar.outputs.completo == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disparar a esteira CD da Lambda
+        id: disparar
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          bash scripts/disparar-esteira.sh \
+            "$DONO/service-track-lambda" cd.yml "env=${{ inputs.env }}"
+
+  verificar:
+    name: "9. Conferir o ambiente"
+    needs: [preparar, lambda_cd]
+    if: always() && needs.preparar.outputs.completo == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Estado dos cinco servicos
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+        run: bash scripts/conferir-ambiente.sh "$ENV_ALVO"
+
+  resumo:
+    name: "Resumo"
+    needs: [preparar, rede, usuarios_infra, stack, bff_segredos, usuarios_banco, servicos_infra, servicos_cd, mesclar, usuarios_pronto, lambda_cd, verificar]
+    if: always()
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS
+        if: needs.stack.result == 'success'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ler os enderecos do ambiente
+        id: enderecos
+        if: needs.stack.result == 'success'
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+        run: |
+          URL="$(aws ssm get-parameter --name "/servicetrack/$ENV_ALVO/api/base-url" \
+            --query Parameter.Value --output text 2>/dev/null || echo '')"
+          echo "api_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Consolidar
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+          ATE: ${{ inputs.ate }}
+          R_REDE: ${{ needs.rede.result }}
+          R_USU_INFRA: ${{ needs.usuarios_infra.result }}
+          R_STACK: ${{ needs.stack.result }}
+          R_BFF_SEG: ${{ needs.bff_segredos.result }}
+          R_USU_BANCO: ${{ needs.usuarios_banco.result }}
+          R_SVC_INFRA: ${{ needs.servicos_infra.result }}
+          R_SVC_CD: ${{ needs.servicos_cd.result }}
+          R_MESCLAR: ${{ needs.mesclar.result }}
+          R_USU_PRONTO: ${{ needs.usuarios_pronto.result }}
+          R_LAMBDA: ${{ needs.lambda_cd.result }}
+          R_VERIFICAR: ${{ needs.verificar.result }}
+        run: |
+          icone() {
+            case "$1" in
+              success)   echo "ok" ;;
+              failure)   echo "**FALHOU**" ;;
+              cancelled) echo "cancelado" ;;
+              skipped)   echo "fora do escopo" ;;
+              *)         echo "$1" ;;
+            esac
+          }
+
+          {
+            echo ""
+            echo "## Resultado"
+            echo ""
+            echo "| # | Fase | Dono | Resultado |"
+            echo "|---|---|---|---|"
+            echo "| 1 | Rede | aws-iac | $(icone "$R_REDE") |"
+            echo "| 2 | Infra do servico de usuarios | usuarios-veiculos | $(icone "$R_USU_INFRA") |"
+            echo "| 3 | Stack: EKS, ArgoCD, Lambda, gateway, NLB | aws-iac | $(icone "$R_STACK") |"
+            echo "| 4a | Segredo do JWT | bff | $(icone "$R_BFF_SEG") |"
+            echo "| 4b | Baseline do banco de usuarios | usuarios-veiculos | $(icone "$R_USU_BANCO") |"
+            echo "| 4c | Infra dos outros quatro | cada servico | $(icone "$R_SVC_INFRA") |"
+            echo "| 5 | CD dos cinco | cada servico | $(icone "$R_SVC_CD") |"
+            echo "| 6 | Mesclar os PRs de tag | cada servico | $(icone "$R_MESCLAR") |"
+            echo "| 7 | Servico de usuarios respondendo | cluster | $(icone "$R_USU_PRONTO") |"
+            echo "| 8 | CD da Lambda | lambda | $(icone "$R_LAMBDA") |"
+            echo "| 9 | Conferencia do ambiente | cluster | $(icone "$R_VERIFICAR") |"
+            echo ""
+
+            if [ "$R_STACK" = "success" ]; then
+              URL="${{ steps.enderecos.outputs.api_url }}"
+              echo "### Como alcancar"
+              echo ""
+              if [ -n "$URL" ]; then
+                echo "A entrada publica tem duas rotas: \`POST /autenticacao\` e \`/bff/{proxy+}\`."
+                echo ""
+                echo "    $URL"
+                echo ""
+                echo "A chave de API muda a cada recriacao:"
+                echo ""
+                echo '```bash'
+                echo "scripts/diagnostico/chave-de-api.sh $ENV_ALVO"
+                echo '```'
+              else
+                echo "Sem borda publica neste ambiente."
+              fi
+              echo ""
+              echo '```bash'
+              echo "aws eks update-kubeconfig --name servicetrack-$ENV_ALVO --region us-east-1"
+              echo "kubectl get pods -A -l app.kubernetes.io/part-of=service-track"
+              echo "kubectl -n argocd get applications"
+              echo '```'
+              echo ""
+            fi
+
+            if [ "$R_BFF_SEG" = "failure" ]; then
+              echo "### O BFF nao vai subir"
+              echo ""
+              echo "O segredo do JWT nao foi criado. Com \`ST_BFF_JWT_ENABLED=true\` o decodificador"
+              echo "exige o PEM na criacao do bean, entao o contexto nao sobe e o pod fica em"
+              echo "CrashLoopBackOff. Como o BFF e a unica entrada publica, o ambiente inteiro fica"
+              echo "inalcancavel. Rode a esteira Segredos do service-track-bff e reexecute a fase 6."
+              echo ""
+            fi
+
+            if [ "$R_MESCLAR" = "failure" ]; then
+              echo "### A imagem nova nao entrou"
+              echo ""
+              echo "O CD publicou no ECR e abriu o PR, mas o PR nao foi mesclado. O ArgoCD segue"
+              echo "sincronizando a tag anterior — que num ambiente recriado e \`placeholder\`, e da"
+              echo "ImagePullBackOff. Mescle os PRs \`deploy/$ENV_ALVO-*\` de cada repositorio."
+              echo ""
+            fi
+
+            if [ "$R_USU_PRONTO" = "failure" ]; then
+              echo "### A autenticacao nao tem quem confira credencial"
+              echo ""
+              echo "O servico de usuarios nao ficou pronto. A Lambda chama"
+              echo "\`POST /credenciais/verificacao\` nele, pelo NLB, e sem replica pronta todo login"
+              echo "falha. A fase 8 nao rodou de proposito: publicar a Lambda aqui daria um ambiente"
+              echo "que responde e nao autentica."
+              echo ""
+            fi
+
+            case "$ATE" in
+              plataforma)
+                echo "Parou em \`plataforma\`: os servicos nao foram tocados."
+                ;;
+              infraestrutura-dos-servicos)
+                echo "Parou em \`infraestrutura-dos-servicos\`: ECR e banco existem, sem imagem publicada."
+                ;;
+              imagens-publicadas)
+                echo "Parou em \`imagens-publicadas\`: os PRs de tag estao abertos e esperando merge."
+                ;;
+            esac
+
+            echo ""
+            echo "As fases sao idempotentes: reexecute esta esteira pelo botao de re-run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Falhar se alguma fase falhou
+        env:
+          RESULTADOS: >-
+            ${{ needs.rede.result }} ${{ needs.usuarios_infra.result }} ${{ needs.stack.result }}
+            ${{ needs.bff_segredos.result }} ${{ needs.usuarios_banco.result }}
+            ${{ needs.servicos_infra.result }} ${{ needs.servicos_cd.result }}
+            ${{ needs.mesclar.result }} ${{ needs.usuarios_pronto.result }}
+            ${{ needs.lambda_cd.result }} ${{ needs.verificar.result }}
+        run: |
+          for r in $RESULTADOS; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::A orquestracao de ${{ inputs.env }} nao concluiu. Veja a tabela do resumo."
+              exit 1
+            fi
+          done
+          echo "todas as fases do escopo concluiram."
