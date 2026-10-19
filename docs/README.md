@@ -40,6 +40,7 @@
 | [034](adr/ADR-034-exposicao-publica-do-bff.md) | `/bff` e `/bff/{proxy+}` na borda pública, por VPC Link |
 | [035](adr/ADR-035-so-o-bff-atras-de-gateway.md) | Nenhum microsserviço é alcançável por gateway, exceto o BFF *(supera a exposição do 033)* |
 | [036](adr/ADR-036-autenticacao-ligada-por-padrao.md) | Autenticação é passo normal da subida, e não depende mais do banco compartilhado *(supera o 027)* |
+| [037](adr/ADR-037-compose-da-plataforma-vive-aqui.md) | O compose que sobe a plataforma inteira vive aqui — segunda exceção nomeada à 026 |
 | [038](adr/ADR-038-orquestracao-entre-repositorios.md) | A plataforma orquestra a subida disparando a esteira de cada repositório |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
