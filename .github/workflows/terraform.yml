@@ -488,6 +488,12 @@ jobs:
           KEY="$(terraform -chdir=$WD output -json api_key_values | jq -r '.ci')"
           REST_API_ID="$(terraform -chdir=$WD output -raw api_gateway_id)"
           export REST_API_ID
+
+          ESPERA_BFF="$(printf 'var.habilitar_entrada_do_bff\n' \
+            | terraform -chdir="$WD" console -no-color 2>/dev/null \
+            | tr -d '"' | grep -Ex 'true|false' | tail -n 1 || true)"
+          export ESPERA_BFF="${ESPERA_BFF:-true}"
+          echo "rotas do BFF esperadas no contrato: $ESPERA_BFF"
           set -o pipefail
           bash scripts/contract-test.sh "$BASE" "$KEY" | tee contract.txt
 
