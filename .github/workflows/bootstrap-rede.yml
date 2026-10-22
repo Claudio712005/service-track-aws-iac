@@ -1,0 +1,101 @@
+name: Bootstrap da rede
+
+run-name: "Bootstrap do EIP do NAT por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment de onde ler as credenciais AWS. Nao limita o escopo: o apply reserva o EIP de todos os ambientes"
+        required: true
+        type: choice
+        options: [hml, prd]
+        default: hml
+      acao:
+        description: "O que fazer"
+        required: true
+        type: choice
+        options: [plan, apply]
+        default: plan
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+concurrency:
+  group: bootstrap-rede
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Reserva o EIP do NAT, fora do ciclo do ambiente
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: Garantir o bucket de state
+        run: bash scripts/bootstrap-tfstate.sh
+
+      - name: terraform init
+        run: |
+          terraform -chdir=iac/bootstrap/rede init -input=false \
+            -backend-config="bucket=$BUCKET_DE_STATE"
+
+      - name: terraform validate
+        run: terraform -chdir=iac/bootstrap/rede validate -no-color
+
+      - name: terraform plan
+        run: terraform -chdir=iac/bootstrap/rede plan -no-color -lock-timeout=5m
+
+      - name: terraform apply
+        if: inputs.acao == 'apply'
+        run: terraform -chdir=iac/bootstrap/rede apply -no-color -auto-approve -lock-timeout=5m
+
+      - name: Resumo
+        if: always()
+        env:
+          ACAO: ${{ inputs.acao }}
+        run: |
+          {
+            echo "### Bootstrap da rede"
+            echo ""
+            if [ "$ACAO" != "apply" ]; then
+              echo "Rodado em \`plan\`. Nada foi criado."
+              echo ""
+            else
+              echo "Os EIP abaixo **sobrevivem ao destroy do ambiente**, e o NAT Gateway de cada"
+              echo "camada de rede os encontra por tag. Libere-os uma vez em cada provedor externo"
+              echo "que filtra por IP de origem."
+              echo ""
+              echo "| Ambiente | IP publico |"
+              echo "|---|---|"
+              terraform -chdir=iac/bootstrap/rede output -json eip_public_ips 2>/dev/null \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(f"| {k} | `{v}` |") for k,v in sorted(d.items())]' \
+                || echo "| — | output indisponivel |"
+              echo ""
+              echo "**MongoDB Atlas:** Network Access List, com \`/32\`. O baseline do catalogo roda"
+              echo "de dentro do cluster, entao e este IP que o Atlas ve."
+              echo ""
+              echo "Este state nunca e destruido pela esteira de ambiente, e os recursos tem"
+              echo "\`prevent_destroy\`. Ver \`IAC-ADR-039\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
