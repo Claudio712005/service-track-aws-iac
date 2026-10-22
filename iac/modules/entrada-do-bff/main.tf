@@ -23,7 +23,7 @@ locals {
 
 resource "aws_security_group" "nlb" {
   name        = "${local.prefixo}-entrada-do-bff-nlb"
-  description = "Entrada do NLB interno: borda publica -> BFF, e Lambda -> verificacao de credencial"
+  description = "Entrada do NLB interno: borda publica para o BFF, e Lambda para a verificacao de credencial"
   vpc_id      = var.vpc_id
 
   egress {
