@@ -41,6 +41,8 @@ apis/
     servicos-{HML,PRD}.yaml        nome, nodePort e caminho de health de cada servico
 
 iac/
+  bootstrap/
+    rede/              EIP do NAT, reservado fora do ciclo do ambiente (IAC-ADR-039)
   network/
     hml/ prd/          VPC e subnets - state proprio, primeira fase de cada ambiente
   modules/
@@ -64,6 +66,7 @@ scripts/               Operacao e diagnostico (ver "Scripts")
 docs/                  ADRs, RFCs, guia do gateway e diagramas
 
 .github/workflows/
+  bootstrap-rede.yml     Reserva o EIP do NAT, uma vez por conta (IAC-ADR-039)
   subir-ambiente.yml     Rede e stack de um ambiente, na ordem
   destruir-ambiente.yml  Stack, e opcionalmente rede, na ordem inversa
   terraform.yml          plan / apply / destroy de uma camada (manual ou chamado pelas duas acima)
