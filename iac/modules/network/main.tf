@@ -40,13 +40,15 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
+  count = var.eip_allocation_id == null ? 1 : 0
+
   domain = "vpc"
 
   tags = merge(var.tags, { Name = "${var.name}-nat" })
 }
 
 resource "aws_nat_gateway" "this" {
-  allocation_id = aws_eip.nat.id
+  allocation_id = var.eip_allocation_id != null ? var.eip_allocation_id : aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
 
   tags       = merge(var.tags, { Name = "${var.name}-nat" })

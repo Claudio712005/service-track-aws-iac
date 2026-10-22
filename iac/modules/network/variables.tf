@@ -29,3 +29,9 @@ variable "public_subnet_cidrs" {
 variable "private_subnet_cidrs" {
   type = list(string)
 }
+
+variable "eip_allocation_id" {
+  description = "Allocation id de um EIP ja existente para o NAT Gateway, vindo do state de bootstrap. Nulo cria um EIP dentro desta camada, que morre com ela."
+  type        = string
+  default     = null
+}
