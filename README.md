@@ -46,6 +46,8 @@ apis/
     servicos-{HML,PRD}.yaml        nome, nodePort e caminho de health de cada servico
 
 iac/
+  bootstrap/
+    rede/              EIP do NAT, reservado fora do ciclo do ambiente (IAC-ADR-039)
   network/
     hml/ prd/          VPC e subnets - state proprio, primeira fase de cada ambiente
   modules/
