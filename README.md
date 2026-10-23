@@ -24,6 +24,11 @@ que precisa (`infra/terraform/`), e entra no cluster sem nenhuma edição deste 
 A exceção é `apis/service-track-api-int/servicos-<ENV>.yaml`: a lista de quem fica atrás da API
 privada, como dado, para que o módulo continue genérico (`IAC-ADR-033`).
 
+A **segunda** exceção é [`compose/`](compose/README.md), que sobe a plataforma inteira na máquina
+para exercitar a saga, a composição do BFF e o trace ponta a ponta sem precisar de `hml`. Ele
+nomeia os cinco serviços porque descreve a composição deles, e a fronteira está escrita no
+`IAC-ADR-037`: nada de Terraform, manifesto ou esteira por serviço.
+
 > **O banco de dados não vive aqui.** O RDS está em
 > [service-track-db-infra](https://github.com/Claudio712005/service-track-db-infra)
 > (`DB-ADR-003`), e com a autenticação desligada este repositório não lê mais nada dele.
@@ -62,11 +67,15 @@ kubernetes/
   argocd/              AppProject, template de Application, bootstrap local
   kind/                Cluster local
 
+compose/               Compose que sobe a plataforma inteira na maquina (IAC-ADR-037)
+  docker-compose.yml   Os cinco servicos, os bancos, Redis, broker e Grafana
+  observabilidade/     Prometheus, Tempo, Loki e o painel da plataforma
+
 scripts/               Operacao e diagnostico (ver "Scripts")
 docs/                  ADRs, RFCs, guia do gateway e diagramas
 
 .github/workflows/
-  bootstrap-rede.yml     Reserva o EIP do NAT, uma vez por conta (IAC-ADR-039)
+  orquestrar-ambiente.yml Sobe o ambiente inteiro, disparando a esteira de cada repo (IAC-ADR-038)
   subir-ambiente.yml     Rede e stack de um ambiente, na ordem
   destruir-ambiente.yml  Stack, e opcionalmente rede, na ordem inversa
   terraform.yml          plan / apply / destroy de uma camada (manual ou chamado pelas duas acima)
