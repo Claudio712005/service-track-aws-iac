@@ -68,6 +68,7 @@ operacional deliberada — falhar na subida, onde se olha, em vez de na demonstr
 
 ```
 1. rede                          (aws-iac)
+1b. ip_de_saida                  (aws-iac)            — imprime o EIP do NAT
 2. usuarios_infra                (usuarios-veiculos)   — publica o endpoint do passo 3
 3. stack                         (aws-iac)             — EKS, ArgoCD, Lambda, gateway, NLB
 4a. bff_segredos                 (bff)                 — o passo que ninguem lembra
@@ -112,6 +113,19 @@ de volta para o runbook, que é o que esta decisão existe para aposentar.
 - **O orquestrador conhece nome de microsserviço**, em duas matrizes. É a terceira exceção ao
   `ADR-026`, depois do `servicos-<ENV>.yaml` (`ADR-033`) e do compose (`ADR-037`), e vale pela
   mesma razão: descreve composição, não infraestrutura. Nenhum módulo Terraform foi tocado.
+
+### Medido em 24/10/2026, antes da primeira execucao
+
+A descoberta da execução remota foi validada contra a API do GitHub, com dispatch real de uma
+esteira de CI: nome de arquivo serve como identificador da esteira, o dispatch responde `204`, e o
+corte por horário achou a execução correta em **7 segundos**, com uma única candidata. Os sete
+segundos confirmam a primeira armadilha documentada em `scripts/disparar-esteira.sh`: consultar
+uma vez logo após o dispatch daria falso negativo.
+
+A fase `1b` existe por causa de um incidente de 21/10/2026: o baseline do Mongo falhou com
+`tlsv1 alert internal error`, que é como o Atlas recusa IP fora da lista, e o operador não tinha o
+IP à mão. Imprimir o endereço de saída logo após a rede torna essa falha legível. A fase `4c`
+depende dela de propósito, para o IP aparecer antes do Banco do catálogo rodar.
 
 ## Alternativas consideradas
 
