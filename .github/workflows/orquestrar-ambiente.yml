@@ -138,6 +138,49 @@ jobs:
       camada: rede
     secrets: inherit
 
+  ip_de_saida:
+    name: "1b. IP de saida do ambiente"
+    needs: rede
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ler o EIP do NAT
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+        run: |
+          IP="$(aws ec2 describe-addresses \
+            --filters "Name=tag:Name,Values=servicetrack-$ENV_ALVO-nat" \
+            --query 'Addresses[0].PublicIp' --output text 2>/dev/null || echo '')"
+
+          if [ -z "$IP" ] || [ "$IP" = "None" ]; then
+            echo "::warning::Nao consegui ler o EIP do NAT de $ENV_ALVO."
+            exit 0
+          fi
+
+          echo "IP de saida de $ENV_ALVO: $IP"
+          {
+            echo ""
+            echo "### IP de saida do ambiente"
+            echo ""
+            echo "    $IP"
+            echo ""
+            echo "E por este endereco que o cluster alcanca servico externo que filtra por IP."
+            echo "**MongoDB Atlas:** Network Access List, com \`/32\`. Sem isso a fase 4c falha no"
+            echo "baseline do Mongo, com timeout de conexao — sintoma que nao aponta para o Atlas."
+            echo ""
+            echo "Com o \`IAC-ADR-039\` aplicado, este IP vem do state de bootstrap e **nao muda**"
+            echo "entre recriacoes: libere uma vez. Sem ele, muda a cada ambiente novo."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   usuarios_infra:
     name: "2. Infra do servico de usuarios"
     needs: rede
@@ -202,7 +245,7 @@ jobs:
 
   servicos_infra:
     name: "4c. Infra de ${{ matrix.servico }}"
-    needs: [preparar, stack]
+    needs: [preparar, stack, ip_de_saida]
     if: needs.preparar.outputs.servicos == 'true'
     runs-on: ubuntu-latest
     environment:
@@ -340,7 +383,7 @@ jobs:
 
   resumo:
     name: "Resumo"
-    needs: [preparar, rede, usuarios_infra, stack, bff_segredos, usuarios_banco, servicos_infra, servicos_cd, mesclar, usuarios_pronto, lambda_cd, verificar]
+    needs: [preparar, rede, ip_de_saida, usuarios_infra, stack, bff_segredos, usuarios_banco, servicos_infra, servicos_cd, mesclar, usuarios_pronto, lambda_cd, verificar]
     if: always()
     runs-on: ubuntu-latest
     environment:
