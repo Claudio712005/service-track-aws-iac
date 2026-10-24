@@ -114,7 +114,14 @@ if [ -n "${REST_API_ID:-}" ] && [ -n "${STAGE_NAME:-}" ] && command -v aws >/dev
   if aws apigateway get-export --rest-api-id "$REST_API_ID" --stage-name "$STAGE_NAME" \
        --export-type oas30 --accepts application/json "$exported" >/dev/null 2>&1; then
     deployed="$(jq -r '.paths | keys[]' "$exported" | sort)"
-    declared="$(grep -Eo '^  (/[^:]*):' "$SPEC" | sed 's/^  //; s/:$//' | sort)"
+    declared="$(
+      {
+        grep -Eo '^  (/[^:]*):' "$SPEC" | sed 's/^  //; s/:$//'
+        if [ "${ESPERA_BFF:-true}" != "false" ]; then
+          printf '%s\n' '/bff' '/bff/{proxy+}'
+        fi
+      } | sort
+    )"
     if [ "$deployed" = "$declared" ]; then
       pass "rotas publicadas conferem com o contrato ($(printf '%s\n' "$declared" | wc -l | tr -d ' ') paths)"
     else
