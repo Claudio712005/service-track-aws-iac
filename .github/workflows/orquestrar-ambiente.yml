@@ -269,7 +269,12 @@ jobs:
   servicos_cd:
     name: "5. CD de ${{ matrix.servico }}"
     needs: [preparar, servicos_infra, usuarios_banco]
-    if: needs.preparar.outputs.imagens == 'true'
+    if: >-
+      always()
+      && needs.preparar.outputs.imagens == 'true'
+      && needs.preparar.result == 'success'
+      && needs.servicos_infra.result != 'cancelled'
+      && needs.usuarios_banco.result != 'cancelled'
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.env }}
@@ -296,7 +301,12 @@ jobs:
   mesclar:
     name: "6. Mesclar os PRs de tag"
     needs: [preparar, servicos_cd, bff_segredos]
-    if: needs.preparar.outputs.completo == 'true' && inputs.mesclar_prs_do_cd
+    if: >-
+      always()
+      && needs.preparar.outputs.completo == 'true'
+      && inputs.mesclar_prs_do_cd
+      && needs.servicos_cd.result != 'cancelled'
+      && needs.bff_segredos.result == 'success'
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.env }}
