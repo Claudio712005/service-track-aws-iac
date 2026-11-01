@@ -87,6 +87,53 @@ jobs:
           fi
           echo "conta $CONTA"
 
+      - name: Conferir os segredos que nao sao criados por apply
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          faltando=0
+
+          exige() {
+            if ! aws ssm get-parameter --name "$1" >/dev/null 2>&1; then
+              echo "::error::$1 nao existe no SSM."
+              faltando=1
+            fi
+          }
+
+          avisa() {
+            if ! aws ssm get-parameter --name "$1" >/dev/null 2>&1; then
+              echo "::warning::$1 nao existe no SSM. $2"
+            fi
+          }
+
+          for chave in uri username password; do
+            exige "/servicetrack/$ENV_ALVO/catalogo/mongodb/$chave"
+          done
+
+          avisa "/servicetrack/$ENV_ALVO/checkout/mercado-pago/access-token" \
+            "O checkout sobe e a cobranca responde erro do provedor."
+
+          if [ "$faltando" -ne 0 ]; then
+            echo "::error::O MongoDB Atlas nao e criado por apply: os tres parametros sao cadastrados"
+            echo "::error::a mao, uma vez por CONTA da AWS. Eles sobrevivem ao destroy do ambiente,"
+            echo "::error::mas nao a uma troca de conta — e a conta do AWS Academy pode rotacionar."
+            echo "::error::Sem eles a fase 4c falha no baseline do Mongo, depois de rede, stack e"
+            echo "::error::tres Infras ja aplicadas. Esta checagem existe para falhar aqui, em segundos."
+            echo "::error::"
+            echo "::error::  aws ssm put-parameter --region us-east-1 --type String --overwrite \\"
+            echo "::error::    --name /servicetrack/$ENV_ALVO/catalogo/mongodb/uri \\"
+            echo "::error::    --value 'mongodb+srv://<cluster>.mongodb.net/ST_INS?retryWrites=true&w=majority'"
+            echo "::error::"
+            echo "::error::A uri vai sem credencial: usuario e senha entram em username e password,"
+            echo "::error::como SecureString. Ver GLOBAL-ADR-012."
+            exit 1
+          fi
+
+          echo "segredos externos de $ENV_ALVO presentes no SSM."
+
       - name: Resolver o escopo
         id: escopo
         env:
