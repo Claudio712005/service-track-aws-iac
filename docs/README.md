@@ -43,6 +43,7 @@
 | [037](adr/ADR-037-compose-da-plataforma-vive-aqui.md) | O compose que sobe a plataforma inteira vive aqui — segunda exceção nomeada à 026 |
 | [038](adr/ADR-038-orquestracao-entre-repositorios.md) | A plataforma orquestra a subida disparando a esteira de cada repositório |
 | [039](adr/ADR-039-eip-do-nat-sobrevive-ao-destroy.md) | O EIP do NAT vive em state de bootstrap e sobrevive ao destroy do ambiente |
+| [040](adr/ADR-040-destruir-tudo-destroi-tudo.md) | Destruir ambiente passa a destruir a infra dos serviços; `subir-ambiente` e `bootstrap-state` aposentadas |
 
 `019` a `022` foram decididos na Fase 2 dentro de `service-track-api`, como `API-ADR-015` a
 `API-ADR-018`, e transferidos para cá na Fase 3 junto com a propriedade da infraestrutura

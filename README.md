@@ -76,11 +76,9 @@ docs/                  ADRs, RFCs, guia do gateway e diagramas
 
 .github/workflows/
   orquestrar-ambiente.yml Sobe o ambiente inteiro, disparando a esteira de cada repo (IAC-ADR-038)
-  subir-ambiente.yml     Rede e stack de um ambiente, na ordem
   destruir-ambiente.yml  Stack, e opcionalmente rede, na ordem inversa
   terraform.yml          plan / apply / destroy de uma camada (manual ou chamado pelas duas acima)
   credenciais-aws.yml    Replica as credenciais AWS na plataforma e nos microsservicos
-  bootstrap-state.yml    Cria o bucket S3 do state (uma vez por conta)
   unlock-state.yml       Remove lock orfao de um state
   contract.yml           Valida contrato, authorizer e fmt/validate (push e PR)
 ```
@@ -196,16 +194,21 @@ num ambiente descartável.
 
 | Esteira | Quando |
 |---|---|
-| **Bootstrap do state** | uma vez por conta AWS, antes de tudo |
 | **Credenciais AWS** | a cada sessão nova do laboratório |
-| **Subir ambiente** | rede → stack, chamando **Terraform** como workflow reutilizável |
-| **Destruir ambiente** | stack, e com escopo `tudo` também a rede |
+| **Bootstrap da rede** | uma vez por **conta** AWS: reserva o EIP do NAT (`IAC-ADR-039`) |
+| **Orquestrar ambiente** | sobe o ambiente inteiro, em nove fases (`IAC-ADR-038`) |
+| **Destruir ambiente** | infra dos cinco serviços, stack, e com escopo `tudo` também a rede |
 | **Terraform** | manual — `plan`, `apply` ou `destroy` de uma camada (`rede` ou `stack`) |
 | **Contract** | automática, em push/PR que toca o contrato ou os módulos do gateway |
 | **Unlock state** | lock órfão depois de uma execução interrompida |
 
-Nenhuma esteira deste repositório dispara esteira de outro repositório. O banco, a Lambda e
-cada microsserviço são operados pelas esteiras dos próprios repositórios.
+**Esta plataforma dispara esteira de outro repositório** desde o `IAC-ADR-038`: **Orquestrar
+ambiente** e **Destruir ambiente** chamam as esteiras de cada microsserviço por
+`workflow_dispatch` e esperam o resultado. A execução continua sendo do repositório dono — a
+plataforma chama, não executa.
+
+O bucket de state não tem esteira própria: o `terraform.yml` chama `scripts/bootstrap-tfstate.sh`
+por conta própria, em qualquer camada.
 
 ### Credenciais AWS
 
@@ -224,15 +227,19 @@ Os ambientes são efêmeros e esta ordem vale para **toda** recriação.
 
 | # | Repositório | Esteira | O quê |
 |---|---|---|---|
-| 0 | este | **Bootstrap do state** | bucket S3 do state — uma vez por conta |
-| 1 | este | **Terraform** → `apply` · `camada: rede` | VPC e subnets |
-| 2 | `service-track-db-infra` | **Terraform** → `apply` | RDS — **só com `habilitar_autenticacao = true`** |
-| 3 | este | **Subir ambiente** | rede (idempotente) → EKS, ArgoCD |
-| 4 | cada microsserviço | a própria esteira | infra em `infra/terraform`, imagem no ECR próprio, deploy pelo ArgoCD |
+| 0 | este | **Credenciais AWS** | propaga as três secrets para os oito repositórios |
+| 1 | este | **Bootstrap da rede** | reserva o EIP do NAT — uma vez por **conta** |
+| 2 | este | **Orquestrar ambiente** | rede, stack, infra e imagem dos cinco serviços, e a Lambda |
 
-Os passos 2, e depois a Lambda, só voltam quando `habilitar_autenticacao` for ligada.
+O passo 1 só se repete quando a conta da AWS muda. O passo 2 cobre o que antes eram onze
+execuções manuais, e o resumo dele traz o resultado de cada fase com o repositório dono.
 
-O stack confere rede e banco antes de começar e falha apontando o que rodar antes.
+Para trabalho cirúrgico — reaplicar só a rede, por exemplo — a esteira **Terraform** continua
+disparável por camada, e não exige `OPS_TOKEN`.
+
+O `service-track-db-infra` **não** é pré-requisito desde o `IAC-ADR-036`: a Lambda não tem banco.
+O pré-requisito da autenticação é o `service-track-usuarios-veiculos`, e a fase 2 da orquestração
+o aplica antes do stack, pela razão registrada naquele ADR.
 
 **Destruir é a ordem inversa:** **Destruir ambiente** com `so-o-stack` → `destroy` do banco
 no `service-track-db-infra` → **Destruir ambiente** com `tudo`. A destruição da rede recusa

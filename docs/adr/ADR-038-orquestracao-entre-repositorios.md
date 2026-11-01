@@ -108,8 +108,10 @@ de volta para o runbook, que é o que esta decisão existe para aposentar.
   entre as candidatas. Descobrir isso em cada job daria onze implementações divergentes.
 - **O merge automático do PR de tag é opcional** (`mesclar_prs_do_cd`), e falha com mensagem onde
   `main` é protegida sem check verde ou sem auto-merge habilitado — hoje `catalogo` e `aws-iac`.
-- **A esteira `subir-ambiente.yml` continua existindo**, cobrindo rede e stack. As duas
-  compartilham o grupo de concorrência `orquestracao-<env>`, então não disputam o mesmo ambiente.
+- **A esteira `subir-ambiente.yml` continuou existindo**, cobrindo rede e stack, e foi
+  **aposentada em 01/11/2026** pelo `ADR-040`, por ser subconjunto exato das fases 1 e 3 desta.
+  O grupo de concorrência `orquestracao-<env>` segue compartilhado com **Destruir ambiente**,
+  então as duas não disputam o mesmo ambiente.
 - **O orquestrador conhece nome de microsserviço**, em duas matrizes. É a terceira exceção ao
   `ADR-026`, depois do `servicos-<ENV>.yaml` (`ADR-033`) e do compose (`ADR-037`), e vale pela
   mesma razão: descreve composição, não infraestrutura. Nenhum módulo Terraform foi tocado.
