@@ -80,8 +80,9 @@ OpenAPI valido
 
 ## Executar HML
 
-Pela pipeline: **Actions → Subir ambiente → `env: hml`**, depois da rede e do banco (ver
-[README raiz](../../README.md#ordem-de-subida-de-um-ambiente)).
+Pela pipeline: **Actions → Orquestrar ambiente → `env: hml`** (ver
+[README raiz](../../README.md#ordem-de-subida-de-um-ambiente)). Para aplicar apenas o stack, sem
+tocar nos microsserviços: **Actions → Terraform → `apply` · `camada: stack`**.
 
 Manualmente:
 

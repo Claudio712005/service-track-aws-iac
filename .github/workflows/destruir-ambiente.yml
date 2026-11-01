@@ -27,6 +27,9 @@ on:
 permissions:
   contents: read
 
+env:
+  DONO: Claudio712005
+
 concurrency:
   group: orquestracao-${{ inputs.env }}
   cancel-in-progress: false
@@ -48,9 +51,41 @@ jobs:
           fi
           echo "confirmado: $ENV_ALVO / $ESCOPO"
 
-  stack:
-    name: "1. Stack"
+  servicos:
+    name: "1. Infra de ${{ matrix.servico }}"
     needs: confirmar
+    if: inputs.escopo == 'tudo'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        servico:
+          - service-track-catalogo
+          - service-track-usuarios-veiculos
+          - service-track-ordens
+          - service-track-checkout
+          - service-track-bff
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disparar o destroy da Infra
+        env:
+          GH_TOKEN: ${{ secrets.OPS_TOKEN }}
+        run: |
+          bash scripts/disparar-esteira.sh \
+            "$DONO/${{ matrix.servico }}" infra.yml \
+            "env=${{ inputs.env }}" "acao=destroy"
+
+  stack:
+    name: "2. Stack"
+    needs: [confirmar, servicos]
+    if: >-
+      always()
+      && needs.confirmar.result == 'success'
+      && needs.servicos.result != 'failure'
+      && needs.servicos.result != 'cancelled'
     uses: ./.github/workflows/terraform.yml
     with:
       action: destroy
@@ -59,7 +94,7 @@ jobs:
     secrets: inherit
 
   rede:
-    name: "2. Rede"
+    name: "3. Rede"
     needs: stack
     if: inputs.escopo == 'tudo'
     uses: ./.github/workflows/terraform.yml
@@ -71,7 +106,7 @@ jobs:
 
   resumo:
     name: "Resumo"
-    needs: [stack, rede]
+    needs: [servicos, stack, rede]
     if: always()
     runs-on: ubuntu-latest
     steps:
