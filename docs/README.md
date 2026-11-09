@@ -64,6 +64,10 @@ deste repositório.
 
 ## Diagramas
 
+- [diagramas/c4-containers.drawio](diagramas/c4-containers.drawio) — **C4 nível 2**: os cinco
+  microsserviços, a Lambda de autenticação, o broker, os quatro bancos relacionais, o Redis e os
+  dois sistemas externos, com o que cada ligação carrega. Sem infraestrutura, de propósito: aqui
+  se lê quem chama quem e quem é dono de qual banco. Desenhado a partir do código em 08/11/2026.
 - [diagramas/arquitetura-aws.drawio](diagramas/arquitetura-aws.drawio) — arquitetura dos dois
   ambientes: borda, VPC, EKS, RDS, esteira de entrega e legenda. Abrir em diagrams.net.
   **Descreve a Fase 3** (monólito, VPC Link, NLB, Datadog); não reflete o `IAC-ADR-026`.

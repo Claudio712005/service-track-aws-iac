@@ -1,0 +1,143 @@
+<mxfile host="Electron">
+  <diagram name="C4 nível 2 · Containers" id="c4-containers">
+    <mxGraphModel dx="1600" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="titulo" value="ServiceTrack · C4 nível 2 — containers" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=19;fontStyle=1;fontColor=#1F1F1D;" vertex="1" parent="1">
+          <mxGeometry x="40" y="24" width="1000" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitulo" value="Processos e armazéns de dados, sem infraestrutura. Nenhum serviço toca o banco de outro: dado alheio vem por API do dono ou por evento. A infraestrutura está em &lt;b&gt;arquitetura-aws.drawio&lt;/b&gt;." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#5A5A56;" vertex="1" parent="1">
+          <mxGeometry x="40" y="58" width="1240" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="pessoa" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;Cliente / Atendente&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Pessoa]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Usa a oficina pela borda pública&lt;/div&gt;" style="html=1;dashed=0;whiteSpace=wrap;fillColor=#08427B;strokeColor=#073B6F;fontColor=#ffffff;shape=mxgraph.c4.person2;align=center;verticalAlign=top;spacingTop=8;points=[[0.5,0,0],[1,0.5,0],[0.5,1,0],[0,0.5,0]];" vertex="1" parent="1">
+          <mxGeometry x="60" y="180" width="200" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="limite" value="ServiceTrack — limite do sistema" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;fillColor=none;strokeColor=#6B6B6B;fontColor=#404040;fontSize=12;fontStyle=1;verticalAlign=top;align=left;spacingLeft=14;spacingTop=8;arcSize=2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="120" width="1040" height="900" as="geometry" />
+        </mxCell>
+        <mxCell id="autenticacao" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;Autenticação&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: Kotlin · AWS Lambda]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Valida CPF e senha e emite JWT RS256&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="360" y="180" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="bff" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;bff&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: Kotlin · Spring WebFlux]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Compõe a resposta pública. Não persiste nada.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="640" y="180" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="usuarios" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;usuarios-veiculos&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: Kotlin · Spring WebMVC]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Clientes, mecânicos, veículos e verificação de credencial&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="360" y="360" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="catalogo" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;catalogo&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: Kotlin · Spring WebMVC]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Serviços, insumos, saldo, reserva e consumo&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="600" y="360" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="ordens" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;ordens&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: Kotlin · Spring WebMVC]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Estado da OS, orçamento e orquestração da saga&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="840" y="360" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="checkout" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;checkout&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: Kotlin · Spring WebMVC]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Cobrança por Pix, boleto e cartão&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="360" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="kafka" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;Kafka&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: broker]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Tópicos v1 · OUTBOX no produtor, INBOX no consumidor&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="710" y="540" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="st_usu" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;st_usu&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: PostgreSQL]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Pessoas, papéis e veículos&lt;/div&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;align=center;" vertex="1" parent="1">
+          <mxGeometry x="360" y="690" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="st_cat" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;st_cat&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: PostgreSQL]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Serviços, saldo e reservas&lt;/div&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;align=center;" vertex="1" parent="1">
+          <mxGeometry x="600" y="690" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="st_ord" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;st_ord&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: PostgreSQL]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;OS, orçamento, sagas e passos&lt;/div&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;align=center;" vertex="1" parent="1">
+          <mxGeometry x="840" y="690" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="st_chk" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;st_chk&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: PostgreSQL]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Cobranças e notificações&lt;/div&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="690" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="redis" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;Redis&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Container: cache]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Queda degrada, não derruba&lt;/div&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#438DD5;strokeColor=#2E6295;fontColor=#ffffff;align=center;" vertex="1" parent="1">
+          <mxGeometry x="360" y="860" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="atlas" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;MongoDB Atlas&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Sistema externo]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;ST_INS — categoria e insumo&lt;/div&gt;" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#999999;strokeColor=#8A8A8A;fontColor=#ffffff;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="690" width="220" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="mercadopago" value="&lt;div style=&quot;font-size:14px;font-weight:600&quot;&gt;Mercado Pago&lt;/div&gt;&lt;div style=&quot;font-size:10px&quot;&gt;[Sistema externo]&lt;/div&gt;&lt;div style=&quot;font-size:11px;margin-top:6px&quot;&gt;Cobrança e webhook assinado&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#999999;strokeColor=#8A8A8A;fontColor=#ffffff;arcSize=8;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="360" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="legenda" value="Azul-escuro: pessoa &amp;#160;·&amp;#160; Azul: container do sistema &amp;#160;·&amp;#160; Cinza: sistema externo &amp;#160;·&amp;#160; Cilindro: armazém de dados &amp;#160;·&amp;#160; Tracejado: mensagem assíncrona" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontColor=#5A5A56;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1060" width="1280" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="verificado" value="Desenhado a partir do código em 08/11/2026: build.gradle.kts e application.yaml dos cinco serviços, infra/terraform de cada repositório e os overlays de hml." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontColor=#5A5A56;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1086" width="1280" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="l1" value="Usa · HTTPS com JWT" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="pessoa" target="bff">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l2" value="POST /autenticacao" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="pessoa" target="autenticacao">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l3" value="POST /credenciais/verificacao" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="autenticacao" target="usuarios">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l4" value="REST · DNS do cluster" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="bff" target="usuarios">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l5" value="REST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.35;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="bff" target="catalogo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l6" value="REST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.35;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="bff" target="ordens">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l7" value="REST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="bff" target="checkout">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1330" y="228" />
+              <mxPoint x="1330" y="330" />
+              <mxPoint x="1190" y="330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l8" value="GET /ordens/{id} · confere o valor do orçamento" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="checkout" target="ordens">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l9" value="Cobra e recebe webhook assinado" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="checkout" target="mercadopago">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l10" value="Publica comandos de estoque" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=6 6;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ordens" target="kafka">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l11" value="Entrega comandos" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=6 6;exitX=0.15;exitY=0;exitDx=0;exitDy=0;entryX=0.85;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="kafka" target="catalogo">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l12" value="Publica eventos de estoque" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=6 6;exitX=0.6;exitY=1;exitDx=0;exitDy=0;entryX=0.15;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="catalogo" target="kafka">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l13" value="Entrega eventos" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=6 6;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0.1;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="kafka" target="ordens">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l14" value="JDBC" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.6;exitY=1;exitDx=0;exitDy=0;entryX=0.6;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="usuarios" target="st_usu">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l15" value="JDBC" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="catalogo" target="st_cat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l16" value="JDBC" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.65;exitY=1;exitDx=0;exitDy=0;entryX=0.65;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ordens" target="st_ord">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l17" value="JDBC" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="checkout" target="st_chk">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="l18" value="Cache de credencial" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="usuarios" target="redis">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="336" y="450" />
+              <mxPoint x="336" y="910" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l19" value="Categoria e insumo · driver Mongo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=blockThin;endFill=1;jettySize=auto;strokeColor=#6B6B6B;fontSize=10;fontColor=#3D3D3D;labelBackgroundColor=#FFFFFF;exitX=0.9;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="catalogo" target="atlas">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="798" y="996" />
+              <mxPoint x="1530" y="996" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
