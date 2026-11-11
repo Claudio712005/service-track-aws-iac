@@ -87,3 +87,9 @@ variable "verificacao_de_credencial" {
     error_message = "node_port colide com o do BFF; o NLB escuta uma porta por alvo."
   }
 }
+
+variable "origem_da_verificacao_security_group_id" {
+  description = "Security group da Lambda de autenticacao. E a unica origem aceita pelo NLB na porta da verificacao de credencial: o trafego da Lambda nao e PrivateLink, entao o security group do NLB o avalia. Obrigatorio quando verificacao_de_credencial nao e nulo."
+  type        = string
+  default     = null
+}

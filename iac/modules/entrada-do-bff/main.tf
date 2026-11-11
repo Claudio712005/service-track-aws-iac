@@ -49,6 +49,25 @@ resource "aws_security_group_rule" "nodes_recebem_do_nlb" {
   source_security_group_id = aws_security_group.nlb.id
 }
 
+resource "aws_security_group_rule" "nlb_recebe_da_lambda" {
+  count = var.verificacao_de_credencial == null ? 0 : 1
+
+  description              = "Lambda de autenticacao chama a verificacao de credencial pelo NLB"
+  type                     = "ingress"
+  security_group_id        = aws_security_group.nlb.id
+  from_port                = var.verificacao_de_credencial.node_port
+  to_port                  = var.verificacao_de_credencial.node_port
+  protocol                 = "tcp"
+  source_security_group_id = var.origem_da_verificacao_security_group_id
+
+  lifecycle {
+    precondition {
+      condition     = var.origem_da_verificacao_security_group_id != null
+      error_message = "verificacao_de_credencial exige origem_da_verificacao_security_group_id: sem ela o security group do NLB nao tem regra de entrada e a Lambda recebe timeout de conexao."
+    }
+  }
+}
+
 resource "aws_lb" "this" {
   name               = "${local.abreviacao}-bff"
   internal           = true
