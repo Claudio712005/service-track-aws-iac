@@ -224,6 +224,8 @@ module "entrada_do_bff" {
 
   bff                       = local.bff_interno
   verificacao_de_credencial = local.verificacao_de_credencial
+
+  origem_da_verificacao_security_group_id = local.autenticacao == 1 ? module.lambda_auth[0].security_group_id : null
 }
 
 resource "aws_ssm_parameter" "api_base_url" {
