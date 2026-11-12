@@ -116,6 +116,11 @@ jobs:
           avisa "/servicetrack/$ENV_ALVO/checkout/mercado-pago/access-token" \
             "O checkout sobe e a cobranca responde erro do provedor."
 
+          for chave in otlp-endpoint instance-id token; do
+            avisa "/servicetrack/$ENV_ALVO/grafana/$chave" \
+              "Os servicos sobem sem exportar telemetria para o Grafana Cloud."
+          done
+
           if [ "$faltando" -ne 0 ]; then
             echo "::error::O MongoDB Atlas nao e criado por apply: os tres parametros sao cadastrados"
             echo "::error::a mao, uma vez por CONTA da AWS. Eles sobrevivem ao destroy do ambiente,"
@@ -313,6 +318,34 @@ jobs:
             "$DONO/${{ matrix.servico }}" infra.yml \
             "env=${{ inputs.env }}" "acao=apply"
 
+  observabilidade:
+    name: "4d. Segredo do Grafana Cloud"
+    needs: [preparar, stack, servicos_infra]
+    if: >-
+      always()
+      && needs.preparar.outputs.servicos == 'true'
+      && needs.stack.result == 'success'
+      && needs.servicos_infra.result != 'cancelled'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Aplicar o segredo nos namespaces dos servicos
+        env:
+          ENV_ALVO: ${{ inputs.env }}
+        run: |
+          aws eks update-kubeconfig --name "servicetrack-$ENV_ALVO" --region "$AWS_REGION" >/dev/null
+          bash scripts/criar-secret-do-grafana.sh "$ENV_ALVO"
+
   servicos_cd:
     name: "5. CD de ${{ matrix.servico }}"
     needs: [preparar, servicos_infra, usuarios_banco]
@@ -440,7 +473,7 @@ jobs:
 
   resumo:
     name: "Resumo"
-    needs: [preparar, rede, ip_de_saida, usuarios_infra, stack, bff_segredos, usuarios_banco, servicos_infra, servicos_cd, mesclar, usuarios_pronto, lambda_cd, verificar]
+    needs: [preparar, rede, ip_de_saida, usuarios_infra, stack, bff_segredos, usuarios_banco, servicos_infra, observabilidade, servicos_cd, mesclar, usuarios_pronto, lambda_cd, verificar]
     if: always()
     runs-on: ubuntu-latest
     environment:
@@ -477,6 +510,7 @@ jobs:
           R_BFF_SEG: ${{ needs.bff_segredos.result }}
           R_USU_BANCO: ${{ needs.usuarios_banco.result }}
           R_SVC_INFRA: ${{ needs.servicos_infra.result }}
+          R_OBS: ${{ needs.observabilidade.result }}
           R_SVC_CD: ${{ needs.servicos_cd.result }}
           R_MESCLAR: ${{ needs.mesclar.result }}
           R_USU_PRONTO: ${{ needs.usuarios_pronto.result }}
@@ -505,6 +539,7 @@ jobs:
             echo "| 4a | Segredo do JWT | bff | $(icone "$R_BFF_SEG") |"
             echo "| 4b | Baseline do banco de usuarios | usuarios-veiculos | $(icone "$R_USU_BANCO") |"
             echo "| 4c | Infra dos outros quatro | cada servico | $(icone "$R_SVC_INFRA") |"
+            echo "| 4d | Segredo do Grafana Cloud | aws-iac | $(icone "$R_OBS") |"
             echo "| 5 | CD dos cinco | cada servico | $(icone "$R_SVC_CD") |"
             echo "| 6 | Mesclar os PRs de tag | cada servico | $(icone "$R_MESCLAR") |"
             echo "| 7 | Servico de usuarios respondendo | cluster | $(icone "$R_USU_PRONTO") |"

@@ -190,6 +190,30 @@ num ambiente descartável.
 > **Limitação aceita (`I-16`):** a chave privada fica gravada no state em S3, porque passa
 > por variável da Lambda.
 
+### Grafana Cloud
+
+A telemetria dos serviços sai pelo agente Java do OTel direto para o gateway OTLP do Grafana
+Cloud. A credencial **não vem de apply**: são três parâmetros cadastrados à mão, uma vez por
+conta e ambiente, que sobrevivem ao `destroy`.
+
+| Parâmetro | Tipo | Onde achar |
+|---|---|---|
+| `/servicetrack/<env>/grafana/otlp-endpoint` | String | portal do Grafana Cloud → stack → *OpenTelemetry* → endpoint OTLP |
+| `/servicetrack/<env>/grafana/instance-id` | String | mesma página, *Instance ID* |
+| `/servicetrack/<env>/grafana/token` | SecureString | token de *Access Policy* com `metrics:write`, `logs:write` e `traces:write` |
+
+A fase **4d** do **Orquestrar ambiente** roda `scripts/criar-secret-do-grafana.sh`, que aplica o
+`Secret` `service-track-observabilidade` em cada namespace `service-track-*` e reinicia os
+deployments que o referenciam. O `Secret` é o que liga o agente: sem ele, os serviços sobem com
+a telemetria desligada, e a fase termina com aviso, não com falha.
+
+Para ligar num ambiente que já está de pé:
+
+```bash
+aws eks update-kubeconfig --name servicetrack-hml --region us-east-1
+bash scripts/criar-secret-do-grafana.sh hml
+```
+
 ## Esteiras
 
 | Esteira | Quando |
