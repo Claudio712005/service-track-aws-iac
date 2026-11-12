@@ -74,7 +74,6 @@ for namespace in "${NAMESPACES[@]}"; do
     --from-literal=OTEL_TRACES_EXPORTER=otlp \
     --from-literal=OTEL_METRICS_EXPORTER=otlp \
     --from-literal=OTEL_LOGS_EXPORTER=otlp \
-    --from-literal=OTEL_INSTRUMENTATION_MICROMETER_ENABLED=true \
     --from-literal=OTEL_RESOURCE_ATTRIBUTES="deployment.environment=$AMBIENTE,service.namespace=$PROJETO" \
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   echo "secret $SEGREDO aplicado em $namespace"
@@ -83,7 +82,11 @@ for namespace in "${NAMESPACES[@]}"; do
     kubectl -n "$namespace" get deployments -o json \
       | jq -r --arg segredo "$SEGREDO" \
           '.items[] | select([.spec.template.spec.containers[].envFrom[]?.secretRef.name] | index($segredo)) | .metadata.name' \
-      | xargs -r -I{} kubectl -n "$namespace" rollout restart deployment/{} >/dev/null
+      | while IFS= read -r deployment; do
+          kubectl -n "$namespace" rollout restart "deployment/$deployment" >/dev/null
+          kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout="${TIMEOUT_DO_ROLLOUT:-600s}" >/dev/null \
+            || echo "::warning::$namespace/$deployment nao terminou o rollout em ${TIMEOUT_DO_ROLLOUT:-600s}"
+        done
   fi
 done
 
