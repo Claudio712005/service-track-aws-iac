@@ -49,7 +49,9 @@ fi
 
 ENDPOINT="${ENDPOINT%/}"
 CREDENCIAL="$(printf '%s:%s' "$INSTANCIA" "$TOKEN" | base64 | tr -d '\n')"
-echo "::add-mask::$CREDENCIAL"
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  echo "::add-mask::$CREDENCIAL"
+fi
 
 NAMESPACES=()
 while IFS= read -r namespace; do
