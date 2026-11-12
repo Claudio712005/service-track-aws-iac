@@ -14,7 +14,8 @@ if [[ "$AMBIENTE" != "hml" && "$AMBIENTE" != "prd" ]]; then
 fi
 
 ler() {
-  aws ssm get-parameter --name "/$PROJETO/$AMBIENTE/grafana/$1" --with-decryption --region "$REGIAO" \
+  local chave="$1"
+  aws ssm get-parameter --name "/$PROJETO/$AMBIENTE/grafana/$chave" --with-decryption --region "$REGIAO" \
     --query Parameter.Value --output text 2>/dev/null || true
 }
 
@@ -71,6 +72,7 @@ for namespace in "${NAMESPACES[@]}"; do
     --from-literal=OTEL_TRACES_EXPORTER=otlp \
     --from-literal=OTEL_METRICS_EXPORTER=otlp \
     --from-literal=OTEL_LOGS_EXPORTER=otlp \
+    --from-literal=OTEL_INSTRUMENTATION_MICROMETER_ENABLED=true \
     --from-literal=OTEL_RESOURCE_ATTRIBUTES="deployment.environment=$AMBIENTE,service.namespace=$PROJETO" \
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   echo "secret $SEGREDO aplicado em $namespace"
