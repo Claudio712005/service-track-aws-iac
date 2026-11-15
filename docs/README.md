@@ -74,3 +74,8 @@ deste repositório.
 - [acoplamentos.md](acoplamentos.md) — o que o desenho mostra mas não explica: NodePort 30080,
   inversão do ArgoCD, segredos fora do Git, HPA medido contra `requests`, SG do NLB.
 - [api-gateway/README.md](api-gateway/README.md) — guia técnico e operacional
+
+## Postman
+
+- [postman/README.md](postman/README.md) — collection da plataforma (Mecânico, Cliente e Saga),
+  parametrizada; `scripts/atualizar-collection-postman.sh <env>` preenche URL e chave a partir da AWS.
