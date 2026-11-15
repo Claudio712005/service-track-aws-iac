@@ -33,3 +33,5 @@ __pycache__/
 *.pyc
 
 compose/.env
+
+docs/postman/*.gerado.*
