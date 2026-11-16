@@ -1,0 +1,2813 @@
+{
+  "info": {
+    "name": "ServiceTrack — Plataforma",
+    "_postman_id": "servicetrack-plataforma",
+    "description": "Collection da plataforma ServiceTrack, parametrizada.\n\n**Antes de usar**, gere a cópia com a URL e a chave do ambiente atual (só exige estar logado na AWS):\n\n    bash scripts/atualizar-collection-postman.sh hml\n\nImporte o arquivo gerado (`docs/postman/servicetrack-hml.gerado.postman_collection.json`) e use com **No Environment**. Os valores ficam na aba *Variables* da collection.\n\n**Pastas**\n- **Mecânico** e **Cliente**: operações por persona, sobre a OS guardada em `ordemId`.\n- **Saga**: `1. Fluxo completo` e `2. Falha e compensação` rodam inteiros pelo Collection Runner, na ordem; `3. Operações` acompanha e retenta sagas.\n\n**Rotas [interno]** vão direto ao serviço de ordens e ao checkout, que ainda não passam pelo BFF: abra `scripts/abrir-port-forwards.sh hml` antes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Mecânico",
+      "description": "Operações da oficina. Comece por Autenticação.",
+      "item": [
+        {
+          "name": "Autenticação",
+          "description": "",
+          "item": [
+            {
+              "name": "Login do mecânico",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/autenticacao"
+                },
+                "description": "Emite o JWT do mecânico pela Lambda de autenticação.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cpf\": \"{{cpfMecanico}}\",\n  \"senha\": \"{{senha}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"tokenMecanico\", pm.response.json().token); } catch (e) { console.log(\"tokenMecanico nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Consultas",
+          "description": "",
+          "item": [
+            {
+              "name": "Listar clientes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/clientes"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Detalhar cliente com veículos",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/clientes/{{clienteId}}"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Listar mecânicos",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/mecanicos"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Listar serviços do catálogo",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/catalogo/servicos"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Listar insumos",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/catalogo/insumos"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Saldo de um insumo",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/catalogo/insumos/{{insumoId}}/saldo"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Ordem de serviço",
+          "description": "",
+          "item": [
+            {
+              "name": "Abrir OS",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens"
+                },
+                "description": "Cria a OS em RECEBIDA e guarda o `ordemId`.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"motivo\": \"{{motivo}}\",\n  \"clienteId\": \"{{clienteId}}\",\n  \"mecanicoId\": \"{{mecanicoId}}\",\n  \"veiculoId\": \"{{veiculoId}}\",\n  \"observacao\": \"Cliente relata barulho na suspensão\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 201\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "try { pm.collectionVariables.set(\"ordemId\", pm.response.json().id); } catch (e) { console.log(\"ordemId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Detalhar OS",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Iniciar diagnóstico",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/diagnostico"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). RECEBIDA -> EM_DIAGNOSTICO.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Incluir serviço",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/servicos"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Guarda o `itemServicoId`.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"servicoId\": \"{{servicoId}}\",\n  \"valor\": {{valorServico}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"itemServicoId\", pm.response.json().itensServico[0].id); } catch (e) { console.log(\"itemServicoId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Incluir insumo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/insumos"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Insumo com quantidade: é o que a saga reserva.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"insumoId\": \"{{insumoId}}\",\n  \"quantidade\": {{quantidadeInsumo}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Remover insumo",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/insumos/{{insumoId}}"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Antes do orçamento.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Gerar orçamento",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/orcamento"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). EM_DIAGNOSTICO -> AGUARDANDO_APROVACAO. Guarda o `valorOrcamento`.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"custoMaoDeObra\": {{custoMaoDeObra}},\n  \"custoInsumos\": {{custoInsumos}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"valorOrcamento\", pm.response.json().orcamento.valorTotal); } catch (e) { console.log(\"valorOrcamento nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Concluir serviço",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/itens-servico/{{itemServicoId}}/conclusao"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mecanicoId\": \"{{mecanicoId}}\",\n  \"observacao\": \"Serviço realizado\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Finalizar OS",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/finalizacao"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Dispara a saga de consumo do estoque.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Entregar veículo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/entrega"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). FINALIZADA -> ENTREGUE.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Cancelar OS",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/cancelamento"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Transição para CANCELADA.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"motivo\": \"Cliente desistiu do serviço\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Histórico da OS",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/historico"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cliente",
+      "description": "Acompanhamento, aprovação e pagamento. Comece por Autenticação.",
+      "item": [
+        {
+          "name": "Autenticação",
+          "description": "",
+          "item": [
+            {
+              "name": "Login da cliente",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/autenticacao"
+                },
+                "description": "Emite o JWT da cliente pela Lambda de autenticação.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cpf\": \"{{cpfCliente}}\",\n  \"senha\": \"{{senha}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"tokenCliente\", pm.response.json().token); } catch (e) { console.log(\"tokenCliente nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Minhas ordens",
+          "description": "",
+          "item": [
+            {
+              "name": "Listar minhas OS",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens?clienteId={{clienteId}}"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Ver OS e orçamento",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Histórico da OS",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/historico"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Orçamento",
+          "description": "",
+          "item": [
+            {
+              "name": "Aprovar orçamento",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/orcamento/aprovacao"
+                },
+                "description": "Dispara a saga de reserva. A resposta ainda mostra AGUARDANDO_APROVACAO: a saga é assíncrona.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Reprovar orçamento",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/orcamento/reprovacao"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"motivo\": \"Valor acima do esperado\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Pagamento",
+          "description": "",
+          "item": [
+            {
+              "name": "[interno] Pagar com Pix",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Ordem no Mercado Pago com QR code. Guarda o `cobrancaId`.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ordemServicoId\": \"{{ordemId}}\",\n  \"meio\": \"PIX\",\n  \"valor\": {{valorOrcamento}},\n  \"pagador\": {\n    \"email\": \"{{emailPagador}}\",\n    \"primeiroNome\": \"Joana\",\n    \"sobrenome\": \"Lima\",\n    \"tipoDeDocumento\": \"CPF\",\n    \"numeroDoDocumento\": \"{{cpfCliente}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 201\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "try { pm.collectionVariables.set(\"cobrancaId\", pm.response.json().id); } catch (e) { console.log(\"cobrancaId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Pagar com boleto",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Boleto exige endereço completo.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ordemServicoId\": \"{{ordemId}}\",\n  \"meio\": \"BOLETO\",\n  \"valor\": {{valorOrcamento}},\n  \"pagador\": {\n    \"email\": \"{{emailPagador}}\",\n    \"primeiroNome\": \"Joana\",\n    \"sobrenome\": \"Lima\",\n    \"tipoDeDocumento\": \"CPF\",\n    \"numeroDoDocumento\": \"{{cpfCliente}}\",\n    \"cep\": \"01310930\",\n    \"logradouro\": \"Av Paulista\",\n    \"numero\": \"1000\",\n    \"bairro\": \"Bela Vista\",\n    \"cidade\": \"Sao Paulo\",\n    \"uf\": \"SP\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 201\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "try { pm.collectionVariables.set(\"cobrancaId\", pm.response.json().id); } catch (e) { console.log(\"cobrancaId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Consultar cobrança",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas/{{cobrancaId}}"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Reconciliar com o Mercado Pago",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas/{{cobrancaId}}/reconciliacao"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Consulta a ordem no provedor e aplica a situação.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Cobranças da OS",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas?ordemServicoId={{ordemId}}"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Saga",
+      "description": "Saga orquestrada pelo serviço de ordens, com o catálogo pelo Kafka.",
+      "item": [
+        {
+          "name": "1. Fluxo completo",
+          "description": "Rode pelo Collection Runner: OS do login à entrega, com as duas sagas e o pagamento.",
+          "item": [
+            {
+              "name": "01 · Login do mecânico",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/autenticacao"
+                },
+                "description": "Emite o JWT do mecânico pela Lambda de autenticação.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cpf\": \"{{cpfMecanico}}\",\n  \"senha\": \"{{senha}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"tokenMecanico\", pm.response.json().token); } catch (e) { console.log(\"tokenMecanico nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "02 · Login da cliente",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/autenticacao"
+                },
+                "description": "Emite o JWT da cliente pela Lambda de autenticação.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cpf\": \"{{cpfCliente}}\",\n  \"senha\": \"{{senha}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"tokenCliente\", pm.response.json().token); } catch (e) { console.log(\"tokenCliente nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "03 · Saldo do insumo antes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/catalogo/insumos/{{insumoId}}/saldo"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "04 · Mecânico abre a OS",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"motivo\": \"{{motivo}}\",\n  \"clienteId\": \"{{clienteId}}\",\n  \"mecanicoId\": \"{{mecanicoId}}\",\n  \"veiculoId\": \"{{veiculoId}}\",\n  \"observacao\": \"Cliente relata barulho na suspensão\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 201\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "try { pm.collectionVariables.set(\"ordemId\", pm.response.json().id); } catch (e) { console.log(\"ordemId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 05 · Iniciar diagnóstico",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/diagnostico"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 06 · Incluir serviço",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/servicos"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"servicoId\": \"{{servicoId}}\",\n  \"valor\": {{valorServico}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"itemServicoId\", pm.response.json().itensServico[0].id); } catch (e) { console.log(\"itemServicoId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 07 · Incluir insumo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/insumos"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"insumoId\": \"{{insumoId}}\",\n  \"quantidade\": {{quantidadeInsumo}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 08 · Gerar orçamento",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/orcamento"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"custoMaoDeObra\": {{custoMaoDeObra}},\n  \"custoInsumos\": {{custoInsumos}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"valorOrcamento\", pm.response.json().orcamento.valorTotal); } catch (e) { console.log(\"valorOrcamento nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "09 · Cliente vê o orçamento",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10 · Cliente aprova  (início da saga de reserva)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/orcamento/aprovacao"
+                },
+                "description": "O ordens publica ReservarEstoque no Kafka pela outbox.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "11 · Saga de reserva CONCLUIDA",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/saga"
+                },
+                "description": "O catálogo reservou e respondeu EstoqueReservado. Espera 10 s antes de enviar.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "setTimeout(() => {}, Number(pm.collectionVariables.get(\"esperaSagaMs\") || 10000));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "12 · OS em EM_EXECUCAO",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}"
+                },
+                "description": "A conclusão da saga avançou a OS.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "13 · Saldo do insumo reservado",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/catalogo/insumos/{{insumoId}}/saldo"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 14 · Concluir serviço",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/itens-servico/{{itemServicoId}}/conclusao"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mecanicoId\": \"{{mecanicoId}}\",\n  \"observacao\": \"Serviço realizado\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 15 · Finalizar  (início da saga de consumo)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/finalizacao"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "16 · Sagas de reserva e consumo CONCLUIDA",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/saga"
+                },
+                "description": "OS em FINALIZADA.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "setTimeout(() => {}, Number(pm.collectionVariables.get(\"esperaSagaMs\") || 10000));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "17 · Saldo do insumo depois",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/catalogo/insumos/{{insumoId}}/saldo"
+                },
+                "description": "A reserva virou baixa definitiva.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 18 · Cobrança com valor errado (recusada)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). O checkout confere o valor contra o orçamento aprovado.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ordemServicoId\": \"{{ordemId}}\",\n  \"meio\": \"PIX\",\n  \"valor\": 1.0,\n  \"pagador\": {\n    \"email\": \"{{emailPagador}}\",\n    \"primeiroNome\": \"Joana\",\n    \"sobrenome\": \"Lima\",\n    \"tipoDeDocumento\": \"CPF\",\n    \"numeroDoDocumento\": \"{{cpfCliente}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 422\", () => pm.expect(pm.response.code).to.be.oneOf([422]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 19 · Cliente paga com Pix",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ordemServicoId\": \"{{ordemId}}\",\n  \"meio\": \"PIX\",\n  \"valor\": {{valorOrcamento}},\n  \"pagador\": {\n    \"email\": \"{{emailPagador}}\",\n    \"primeiroNome\": \"Joana\",\n    \"sobrenome\": \"Lima\",\n    \"tipoDeDocumento\": \"CPF\",\n    \"numeroDoDocumento\": \"{{cpfCliente}}\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 201\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "try { pm.collectionVariables.set(\"cobrancaId\", pm.response.json().id); } catch (e) { console.log(\"cobrancaId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 20 · Reconciliar com o Mercado Pago",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{checkoutUrl}}/cobrancas/{{cobrancaId}}/reconciliacao"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] 21 · Entregar veículo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/entrega"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "22 · Histórico completo",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/historico"
+                },
+                "description": "RECEBIDA -> ... -> ENTREGUE.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "2. Falha e compensação",
+          "description": "Rode pelo Collection Runner: reserva recusada, saga compensada, OS cancelada.",
+          "item": [
+            {
+              "name": "F1 · Login do mecânico",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/autenticacao"
+                },
+                "description": "Emite o JWT do mecânico pela Lambda de autenticação.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cpf\": \"{{cpfMecanico}}\",\n  \"senha\": \"{{senha}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"tokenMecanico\", pm.response.json().token); } catch (e) { console.log(\"tokenMecanico nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "F2 · Login da cliente",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/autenticacao"
+                },
+                "description": "Emite o JWT da cliente pela Lambda de autenticação.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cpf\": \"{{cpfCliente}}\",\n  \"senha\": \"{{senha}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                      "try { pm.collectionVariables.set(\"tokenCliente\", pm.response.json().token); } catch (e) { console.log(\"tokenCliente nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "F3 · Abrir OS",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"motivo\": \"Troca de óleo\",\n  \"clienteId\": \"{{clienteId}}\",\n  \"mecanicoId\": \"{{mecanicoId}}\",\n  \"veiculoId\": \"{{veiculoId}}\",\n  \"observacao\": \"\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 201\", () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                      "try { pm.collectionVariables.set(\"ordemFalhaId\", pm.response.json().id); } catch (e) { console.log(\"ordemFalhaId nao encontrado na resposta\"); }"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] F4 · Iniciar diagnóstico",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemFalhaId}}/diagnostico"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] F5 · Incluir insumo sem saldo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemFalhaId}}/insumos"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Insumo com saldo zero no seed.",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"insumoId\": \"{{insumoSemSaldoId}}\",\n  \"quantidade\": 1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] F6 · Gerar orçamento",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemFalhaId}}/orcamento"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). ",
+                "auth": {
+                  "type": "noauth"
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"custoMaoDeObra\": 80.0,\n  \"custoInsumos\": 32.0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "F7 · Cliente aprova",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemFalhaId}}/orcamento/aprovacao"
+                },
+                "description": "A reserva será recusada.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "F8 · Saga COMPENSADA",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemFalhaId}}/saga"
+                },
+                "description": "ReservaRecusada -> compensação.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "setTimeout(() => {}, Number(pm.collectionVariables.get(\"esperaSagaMs\") || 10000));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "F9 · OS CANCELADA pela compensação",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemFalhaId}}/historico"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenCliente}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "3. Operações",
+          "description": "Acompanhar e retentar as sagas da OS em `ordemId`.",
+          "item": [
+            {
+              "name": "Sagas da OS",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/ordens/{{ordemId}}/saga"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Saldo e reservas do insumo",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/bff/catalogo/insumos/{{insumoId}}/saldo"
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{tokenMecanico}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Retentar reserva",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/saga/reserva"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Reabre a saga de reserva da OS.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[interno] Retentar consumo",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ordensUrl}}/ordens/{{ordemId}}/saga/consumo"
+                },
+                "description": "**Rota interna**: exige o port-forward (`scripts/abrir-port-forwards.sh`). Depois de repor estoque em consumo recusado.",
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"responde 200\", () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "",
+      "type": "string",
+      "description": "URL do execute-api. Volátil: preenchida pelo script a cada ambiente."
+    },
+    {
+      "key": "apiKey",
+      "value": "",
+      "type": "string",
+      "description": "Chave do API Gateway. Volátil e secreta: preenchida pelo script, nunca versionada."
+    },
+    {
+      "key": "ordensUrl",
+      "value": "http://localhost:18083",
+      "type": "string",
+      "description": "Serviço de ordens pelo port-forward."
+    },
+    {
+      "key": "checkoutUrl",
+      "value": "http://localhost:18084",
+      "type": "string",
+      "description": "Checkout pelo port-forward."
+    },
+    {
+      "key": "cpfMecanico",
+      "value": "19028736530",
+      "type": "string",
+      "description": "Mecânico do seed."
+    },
+    {
+      "key": "cpfCliente",
+      "value": "52998224725",
+      "type": "string",
+      "description": "Cliente do seed."
+    },
+    {
+      "key": "senha",
+      "value": "servicetrack-demo",
+      "type": "string",
+      "description": "Senha de demonstração do seed."
+    },
+    {
+      "key": "emailPagador",
+      "value": "test@testuser.com",
+      "type": "string",
+      "description": "Pagador de teste do Mercado Pago."
+    },
+    {
+      "key": "clienteId",
+      "value": "9f1c6b40-2d58-4a77-9c31-5e8b0a4d1f22",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "mecanicoId",
+      "value": "4a7e2d13-88b6-4f09-a5d2-7c1f3b9e6a08",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "veiculoId",
+      "value": "e18d4a92-7c53-4b06-9f81-3a6c2d5e8b17",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "servicoId",
+      "value": "4b0a0a22-4dd7-4367-95d7-6a3583b4c0ea",
+      "type": "string",
+      "description": "Alinhamento e balanceamento."
+    },
+    {
+      "key": "insumoId",
+      "value": "018f30bb-77a1-7c22-9b10-2a44de81f0aa",
+      "type": "string",
+      "description": "Óleo 5W30 sintético, com saldo."
+    },
+    {
+      "key": "insumoSemSaldoId",
+      "value": "018f30d0-9e11-7b44-9c55-3ad2f1b0e7c8",
+      "type": "string",
+      "description": "Óleo 20W50 com saldo zero: gatilho da compensação."
+    },
+    {
+      "key": "motivo",
+      "value": "Revisão de suspensão e alinhamento",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "valorServico",
+      "value": "149.90",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "quantidadeInsumo",
+      "value": "4",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "custoMaoDeObra",
+      "value": "149.90",
+      "type": "string",
+      "description": ""
+    },
+    {
+      "key": "custoInsumos",
+      "value": "155.60",
+      "type": "string",
+      "description": "4 x R$ 38,90."
+    },
+    {
+      "key": "esperaSagaMs",
+      "value": "10000",
+      "type": "string",
+      "description": "Espera antes de consultar a saga: o tempo de ida e volta pelo Kafka."
+    },
+    {
+      "key": "tokenMecanico",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido pelo login do mecânico."
+    },
+    {
+      "key": "tokenCliente",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido pelo login da cliente."
+    },
+    {
+      "key": "ordemId",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido ao abrir a OS."
+    },
+    {
+      "key": "itemServicoId",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido ao incluir o serviço."
+    },
+    {
+      "key": "valorOrcamento",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido ao gerar o orçamento."
+    },
+    {
+      "key": "cobrancaId",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido ao pagar."
+    },
+    {
+      "key": "ordemFalhaId",
+      "value": "",
+      "type": "string",
+      "description": "Preenchido no cenário de falha."
+    }
+  ]
+}
